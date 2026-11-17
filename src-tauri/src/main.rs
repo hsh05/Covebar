@@ -49,13 +49,13 @@ fn set_settings(app: AppHandle, state: State<AppState>, mut settings: Settings) 
     settings::save(&state.settings_path, &settings).map_err(|e| e.to_string())?;
     *state.settings.lock().unwrap() = settings.clone();
 
-    if old.edge != settings.edge || old.size != settings.size {
+    if old.edge != settings.edge || old.size != settings.size || old.shape != settings.shape {
         popups::close_card(&app, None);
         popups::close_menu(&app);
         popups::hide_preview(&app);
         dock::place(&app);
     }
-    if old.theme != settings.theme || old.material != settings.material {
+    if old.theme != settings.theme || old.material != settings.material || old.shape != settings.shape {
         dock::apply_look(&app, &settings);
     }
     if old.hide_taskbar != settings.hide_taskbar {
@@ -168,6 +168,16 @@ fn get_media() -> Option<media::MediaInfo> {
 #[tauri::command]
 fn media_command(action: String) {
     media::command(action);
+}
+
+#[tauri::command]
+fn get_app_volume(source: String) -> Option<audio::AppVolume> {
+    audio::app_volume(source)
+}
+
+#[tauri::command]
+fn set_app_volume(source: String, volume: Option<f32>, muted: Option<bool>) {
+    audio::set_app_volume(source, volume, muted);
 }
 
 #[tauri::command]
@@ -388,6 +398,8 @@ fn main() {
             get_media,
             media_command,
             media_seek,
+            get_app_volume,
+            set_app_volume,
             get_audio,
             set_volume,
             set_mute,

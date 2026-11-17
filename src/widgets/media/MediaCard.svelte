@@ -2,7 +2,8 @@
   import { invoke } from "@tauri-apps/api/core";
   import { fade } from "svelte/transition";
   import Icon from "../../lib/Icon.svelte";
-  import { media, ticker } from "../../lib/live.svelte";
+  import { audio, media, ticker } from "../../lib/live.svelte";
+  import { speakerIcon } from "../volume/VolumeTile.svelte";
   import { iconUrl } from "../../lib/icons";
   import { mmss } from "../../lib/format";
 
@@ -24,6 +25,52 @@
   });
 
   const cmd = (action: string) => invoke("media_command", { action });
+
+  // ---- volume: the player's own mixer level when we can find it, else the system volume
+  const sys = audio();
+  let appVol = $state<{ volume: number; muted: boolean } | null>(null);
+  let pending = $state<number | null>(null); // value being dragged, so polling doesn't fight it
+  // Only poll while the card is on screen (its window stays alive when hidden).
+  let visible = $state(!document.hidden);
+  $effect(() => {
+    const on = () => (visible = !document.hidden);
+    document.addEventListener("visibilitychange", on);
+    return () => document.removeEventListener("visibilitychange", on);
+  });
+  const poll = ticker(1000, () => visible);
+  $effect(() => {
+    void poll.now;
+    const src = m?.source;
+    if (!src) return void (appVol = null);
+    invoke<typeof appVol>("get_app_volume", { source: src }).then((v) => (appVol = v));
+  });
+  const vol = $derived(
+    appVol
+      ? { level: Math.round(appVol.volume * 100), muted: appVol.muted, app: true }
+      : sys.v.output
+        ? { level: Math.round(sys.v.output.volume * 100), muted: sys.v.output.muted, app: false }
+        : null,
+  );
+  const level = $derived(pending ?? vol?.level ?? 0);
+
+  function setVol(v: number) {
+    pending = v;
+    if (vol?.app && m) {
+      appVol = { volume: v / 100, muted: v > 0 ? false : !!appVol?.muted };
+      invoke("set_app_volume", { source: m.source, volume: v / 100 });
+    } else {
+      invoke("set_volume", { which: "output", volume: v / 100 });
+    }
+  }
+  function toggleMute() {
+    if (!vol) return;
+    if (vol.app && m) {
+      appVol = appVol && { ...appVol, muted: !vol.muted };
+      invoke("set_app_volume", { source: m.source, muted: !vol.muted });
+    } else {
+      invoke("set_mute", { which: "output", muted: !vol.muted });
+    }
+  }
 
   // ---- scrubbing: click or drag along the bar to pick a spot in the track
   let scrub = $state<number | null>(null); // seconds under the pointer while dragging
@@ -114,8 +161,8 @@
     {/if}
 
     <div class="controls">
-      <button class="icon-btn" disabled={!m.canPrev} onclick={() => cmd("prev")} aria-label="Previous">
-        <Icon name="prev" size={18} />
+      <button class="icon-btn skip" disabled={!m.canPrev} onclick={() => cmd("prev")} aria-label="Previous">
+        <Icon name="prev" size={22} />
       </button>
       <button
         class="btn primary round big"
@@ -123,12 +170,34 @@
         onclick={() => cmd("playPause")}
         aria-label={m.playing ? "Pause" : "Play"}
       >
-        <Icon name={m.playing ? "pause" : "play"} size={18} />
+        {#key m.playing}
+          <span class="swap" in:fade={{ duration: 160 }}><Icon name={m.playing ? "pause" : "play"} size={24} /></span>
+        {/key}
       </button>
-      <button class="icon-btn" disabled={!m.canNext} onclick={() => cmd("next")} aria-label="Next">
-        <Icon name="next" size={18} />
+      <button class="icon-btn skip" disabled={!m.canNext} onclick={() => cmd("next")} aria-label="Next">
+        <Icon name="next" size={22} />
       </button>
     </div>
+
+    {#if vol}
+      <div class="volume" title={vol.app ? `${m.sourceName} volume` : "System volume"}>
+        <button class="icon-btn" class:muted={vol.muted} onclick={toggleMute} aria-label={vol.muted ? "Unmute" : "Mute"}>
+          <Icon name={speakerIcon(level, vol.muted)} size={18} />
+        </button>
+        <input
+          class="range"
+          type="range"
+          min="0"
+          max="100"
+          value={level}
+          style:--val={vol.muted ? 0 : level}
+          oninput={(e) => setVol(+e.currentTarget.value)}
+          onchange={() => setTimeout(() => (pending = null), 600)}
+          aria-label={vol.app ? `${m.sourceName} volume` : "System volume"}
+        />
+        <span class="pct">{level}</span>
+      </div>
+    {/if}
   {:else}
     <div class="empty muted-text">
       <Icon name="music" size={28} />
@@ -274,12 +343,34 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 18px;
-    margin-top: auto;
+    gap: 22px;
+    margin-top: -6px;
+  }
+  .skip {
+    width: 38px;
+    height: 38px;
   }
   .big {
-    width: 44px;
-    height: 44px;
+    width: 50px;
+    height: 50px;
+  }
+  .swap {
+    display: grid;
+  }
+  .volume {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .volume .muted {
+    color: var(--danger);
+  }
+  .pct {
+    width: 26px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
   }
   .empty {
     flex: 1;

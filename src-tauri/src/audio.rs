@@ -7,11 +7,12 @@ use std::ffi::c_void;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use windows::core::{interface, GUID, HRESULT, IUnknown, IUnknown_Vtbl, PCWSTR};
+use windows::core::{interface, Interface, GUID, HRESULT, IUnknown, IUnknown_Vtbl, PCWSTR};
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
-    eCapture, eCommunications, eConsole, eMultimedia, eRender, EDataFlow, IMMDevice, IMMDeviceEnumerator,
+    eCapture, eCommunications, eConsole, eMultimedia, eRender, EDataFlow, IAudioSessionControl2, IAudioSessionManager2,
+    IMMDevice, IMMDeviceEnumerator, ISimpleAudioVolume,
     MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
 };
 use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_ALL, STGM_READ};
@@ -207,4 +208,98 @@ pub fn set_default_output(id: String) {
         }
         refresh();
     });
+}
+
+// ---------------------------------------------------------------- per-app volume
+
+/// Volume of one app's audio sessions (the mixer's per-app slider).
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AppVolume {
+    pub volume: f32,
+    pub muted: bool,
+}
+
+/// Names an app's processes might go by, from its media AppUserModelID:
+/// "Spotify.exe" -> spotify, "MSEdge" -> msedge, "SpotifyAB.SpotifyMusic_zpd...!Spotify" -> spotifyab.spotifymusic.
+fn app_tokens(aumid: &str) -> Vec<String> {
+    let lower = aumid.to_lowercase();
+    let base = lower.split('!').next().unwrap_or(&lower);
+    let exe = base.rsplit(['\\', '/']).next().unwrap_or(base).trim_end_matches(".exe");
+    let mut t = vec![exe.to_string()];
+    if let Some((pkg, _)) = base.split_once('_') {
+        t.push(pkg.to_string());
+    }
+    t.retain(|s| s.len() >= 3);
+    t
+}
+
+/// The audio sessions on the default speakers that belong to the app.
+unsafe fn app_sessions(aumid: &str) -> Vec<ISimpleAudioVolume> {
+    let tokens = app_tokens(aumid);
+    let mut out = Vec::new();
+    let Some(dev) = enumerator().ok().and_then(|e| e.GetDefaultAudioEndpoint(eRender, eMultimedia).ok()) else {
+        return out;
+    };
+    let Ok(mgr) = dev.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None) else { return out };
+    let Ok(list) = mgr.GetSessionEnumerator() else { return out };
+    for i in 0..list.GetCount().unwrap_or(0) {
+        let Ok(ctl) = list.GetSession(i) else { continue };
+        let Ok(ctl2) = ctl.cast::<IAudioSessionControl2>() else { continue };
+        let pid = ctl2.GetProcessId().unwrap_or(0);
+        if pid == 0 {
+            continue;
+        }
+        let Some(path) = crate::win::process_path(pid) else { continue };
+        let path = path.to_lowercase();
+        let stem = crate::win::file_stem_lower(&path);
+        if tokens.iter().any(|t| *t == stem || path.contains(t.as_str())) {
+            if let Ok(v) = ctl.cast::<ISimpleAudioVolume>() {
+                out.push(v);
+            }
+        }
+    }
+    out
+}
+
+/// The app's volume, or None if it has no audio session we can match.
+pub fn app_volume(aumid: String) -> Option<AppVolume> {
+    WORKER.get()?.call(move || unsafe {
+        let s = app_sessions(&aumid);
+        let v = s.first()?;
+        Some(AppVolume {
+            volume: v.GetMasterVolume().unwrap_or(1.0),
+            muted: s.iter().all(|v| v.GetMute().map(|b| b.as_bool()).unwrap_or(false)),
+        })
+    })?
+}
+
+/// Set the app's volume (all its sessions); turning it up unmutes it.
+pub fn set_app_volume(aumid: String, volume: Option<f32>, muted: Option<bool>) {
+    let Some(w) = WORKER.get() else { return };
+    w.run(move || unsafe {
+        for v in app_sessions(&aumid) {
+            if let Some(vol) = volume {
+                let vol = vol.clamp(0.0, 1.0);
+                let _ = v.SetMasterVolume(vol, std::ptr::null());
+                if vol > 0.0 {
+                    let _ = v.SetMute(false, std::ptr::null());
+                }
+            }
+            if let Some(m) = muted {
+                let _ = v.SetMute(m, std::ptr::null());
+            }
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::app_tokens;
+    #[test]
+    fn tokens() {
+        assert_eq!(app_tokens("Spotify.exe"), vec!["spotify"]);
+        assert_eq!(app_tokens("MSEdge"), vec!["msedge"]);
+        assert_eq!(app_tokens("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"), vec!["spotifyab.spotifymusic_zpdnekdrzrea0", "spotifyab.spotifymusic"]);
+    }
 }
