@@ -4,10 +4,11 @@ use crate::settings::Edge;
 use crate::state::AppState;
 use crate::win;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder};
-use windows::Win32::Foundation::{RECT, TRUE};
+use windows::Win32::Foundation::{POINT, RECT, TRUE};
+use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetWindowRect, IsWindowVisible};
 use windows::Win32::Graphics::Dwm::{
     DwmQueryThumbnailSourceSize, DwmRegisterThumbnail, DwmUnregisterThumbnail,
     DwmUpdateThumbnailProperties, DWM_THUMBNAIL_PROPERTIES, DWM_TNP_OPACITY,
@@ -140,13 +141,55 @@ pub fn show_preview(app: &AppHandle, data: PreviewData, anchor_x: f64, anchor_w:
     let _ = app.emit_to("preview", "preview-data", data);
     if let Some(hw) = win::tauri_hwnd(&pv) {
         win::show_no_activate(hw);
+        watch_cursor(app.clone(), win::hval(hw));
     }
 }
 
+static PREVIEW_SESSION: AtomicU64 = AtomicU64::new(0);
+
+/// Pointer-leave events are unreliable when the cursor leaves a WebView window quickly, so
+/// also poll the cursor: once it has been off both the dock and the preview for a moment,
+/// hide the preview.
+fn watch_cursor(app: AppHandle, preview: isize) {
+    let me = PREVIEW_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
+    std::thread::spawn(move || {
+        let inside = |r: &RECT, p: &POINT| p.x >= r.left && p.x < r.right && p.y >= r.top && p.y < r.bottom;
+        let mut away_since: Option<Instant> = None;
+        loop {
+            std::thread::sleep(Duration::from_millis(60));
+            if PREVIEW_SESSION.load(Ordering::SeqCst) != me {
+                return;
+            }
+            let pv = win::hwnd(preview);
+            if unsafe { !IsWindowVisible(pv).as_bool() } {
+                return;
+            }
+            let mut p = POINT::default();
+            let mut pr = RECT::default();
+            unsafe {
+                let _ = GetCursorPos(&mut p);
+                let _ = GetWindowRect(pv, &mut pr);
+            }
+            let d = *app.state::<AppState>().dock.lock().unwrap();
+            let dock = RECT { left: d.x, top: d.y, right: d.x + d.w, bottom: d.y + d.h };
+            if inside(&pr, &p) || inside(&dock, &p) {
+                away_since = None;
+            } else if away_since.get_or_insert_with(Instant::now).elapsed() > Duration::from_millis(300) {
+                hide_preview(&app);
+                return;
+            }
+        }
+    });
+}
+
 pub fn hide_preview(app: &AppHandle) {
+    PREVIEW_SESSION.fetch_add(1, Ordering::SeqCst);
     clear_thumbnails(app);
     if let Some(pv) = app.get_webview_window("preview") {
-        let _ = pv.hide();
+        if pv.is_visible().unwrap_or(false) {
+            let _ = pv.hide();
+            let _ = app.emit_to("dock", "preview-hidden", ());
+        }
     }
 }
 

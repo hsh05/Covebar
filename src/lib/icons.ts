@@ -4,8 +4,8 @@ const cache = new Map<string, Promise<string | null>>();
 
 /** Data URL for an app icon key, fetched once per key and size. */
 export function iconUrl(key: string, cssPx: number): Promise<string | null> {
-  const want = cssPx * (window.devicePixelRatio || 1);
-  const size = [32, 48, 64, 96, 128, 256].find((s) => s >= want) ?? 256;
+  // Ask for the exact device-pixel size so the icon is drawn 1:1, never resampled in the page.
+  const size = Math.min(256, Math.round(cssPx * (window.devicePixelRatio || 1)));
   const k = `${size}|${key}`;
   let p = cache.get(k);
   if (!p) {

@@ -228,6 +228,7 @@ fn main() {
             }
             return;
         }
+        Some("--dump-icons") => return apps::dump_icons(args.get(2).map(String::as_str).unwrap_or(".")),
         _ => {}
     }
 

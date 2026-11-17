@@ -64,8 +64,14 @@ pub fn set_taskbar_hidden(app: &AppHandle, hide: bool) {
     st.taskbar_hidden.store(hide, Ordering::SeqCst);
 }
 
-fn contains(outer: &RECT, inner: &RECT) -> bool {
-    inner.left <= outer.left && inner.top <= outer.top && inner.right >= outer.right && inner.bottom >= outer.bottom
+/// `inner` covers `outer`, allowing a few pixels of slack: browsers in F11 mode leave a 1-2 px
+/// strip on the edge of an auto-hide taskbar so it can still be revealed.
+fn covers(outer: &RECT, inner: &RECT) -> bool {
+    const SLACK: i32 = 4;
+    inner.left <= outer.left + SLACK
+        && inner.top <= outer.top + SLACK
+        && inner.right >= outer.right - SLACK
+        && inner.bottom >= outer.bottom - SLACK
 }
 
 /// True when the foreground window covers the whole primary monitor (games, video, presentations).
@@ -87,21 +93,14 @@ fn fullscreen_on_primary() -> bool {
         if GetWindowRect(fg, &mut r).is_err() {
             return false;
         }
-        contains(&win::monitor_rect(mon), &r)
+        covers(&win::monitor_rect(mon), &r)
     }
 }
 
 /// Shell surfaces (Start, search, flyouts) during which the taskbar must not be forced hidden.
 fn shell_ui_in_front() -> bool {
     let fg = unsafe { GetForegroundWindow() };
-    if fg.is_invalid() {
-        return true;
-    }
-    let exe = win::process_path(win::window_pid(fg)).unwrap_or_default();
-    matches!(
-        win::file_stem_lower(&exe).as_str(),
-        "startmenuexperiencehost" | "searchhost" | "searchapp" | "shellexperiencehost" | "shellhost"
-    ) || matches!(win::class_name(fg).as_str(), "Shell_TrayWnd" | "Shell_SecondaryTrayWnd")
+    fg.is_invalid() || win::is_shell_ui(fg)
 }
 
 /// Background loop: fullscreen hiding, keeping the taskbar hidden, and recovering from

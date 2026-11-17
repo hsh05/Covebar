@@ -11,9 +11,15 @@
   let snap = $state<AppsSnapshot>({ apps: [], active: 0 });
   invoke<AppsSnapshot>("get_apps").then((s) => (snap = s));
   const unlisten = listen<AppsSnapshot>("apps-changed", (e) => (snap = e.payload));
-  onDestroy(() => unlisten.then((f) => f()));
+  // The backend hides the preview itself once the cursor is off the dock and preview.
+  const unlistenHidden = listen("preview-hidden", () => (previewKey = null));
+  onDestroy(() => {
+    unlisten.then((f) => f());
+    unlistenHidden.then((f) => f());
+  });
 
-  const iconPx = $derived(store.s?.size === "large" ? 36 : 26);
+  // Same sizes as the Windows taskbar uses (small / large icons).
+  const iconPx = $derived(store.s?.size === "large" ? 32 : 24);
 
   // ---- hover previews
   let hoverTimer: ReturnType<typeof setTimeout> | undefined;
@@ -108,17 +114,15 @@
 <div class="apps">
   <button class="tile start" onclick={() => invoke("open_start")} data-nodrag title="Start">
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="6" cy="6" r="2.2" /><circle cx="12" cy="6" r="2.2" /><circle cx="18" cy="6" r="2.2" />
-      <circle cx="6" cy="12" r="2.2" /><circle cx="12" cy="12" r="2.2" /><circle cx="18" cy="12" r="2.2" />
-      <circle cx="6" cy="18" r="2.2" /><circle cx="12" cy="18" r="2.2" /><circle cx="18" cy="18" r="2.2" />
+      <rect x="1.5" y="1.5" width="10" height="10" rx="0.6" />
+      <rect x="12.5" y="1.5" width="10" height="10" rx="0.6" />
+      <rect x="1.5" y="12.5" width="10" height="10" rx="0.6" />
+      <rect x="12.5" y="12.5" width="10" height="10" rx="0.6" />
     </svg>
   </button>
 
   <div class="list">
-    {#each snap.apps as app, i (app.key)}
-      {#if i > 0 && !app.pinned && snap.apps[i - 1].pinned}
-        <span class="divider" aria-hidden="true"></span>
-      {/if}
+    {#each snap.apps as app (app.key)}
       <button
         class="tile app"
         class:running={app.windows.length > 0}
@@ -152,11 +156,11 @@
   .start {
     width: calc(var(--bar) - 8px);
     flex: none;
-    color: var(--accent);
+    color: #0a84ff;
   }
   .start svg {
-    width: calc(var(--icon) - 6px);
-    height: calc(var(--icon) - 6px);
+    width: calc(var(--icon) - 2px);
+    height: calc(var(--icon) - 2px);
     fill: currentColor;
   }
   .list {
@@ -167,13 +171,6 @@
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
-  }
-  .divider {
-    flex: none;
-    width: 1px;
-    height: calc(var(--bar) * 0.42);
-    background: var(--line);
-    margin: 0 4px;
   }
   .app {
     position: relative;

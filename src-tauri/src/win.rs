@@ -150,3 +150,15 @@ pub fn build_number() -> u32 {
 pub fn is_windows_11() -> bool {
     build_number() >= 22000
 }
+
+/// Start, search and other shell flyouts (and the taskbar itself).
+pub fn is_shell_ui(h: HWND) -> bool {
+    if h.is_invalid() {
+        return false;
+    }
+    let exe = process_path(window_pid(h)).unwrap_or_default();
+    matches!(
+        file_stem_lower(&exe).as_str(),
+        "startmenuexperiencehost" | "searchhost" | "searchapp" | "shellexperiencehost" | "shellhost"
+    ) || matches!(class_name(h).as_str(), "Shell_TrayWnd" | "Shell_SecondaryTrayWnd")
+}

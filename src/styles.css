@@ -4,7 +4,7 @@
   --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
 
   --bar: 48px;
-  --icon: 26px;
+  --icon: 24px;
   --tile-radius: 9px;
   --clock-time: 15px;
   --clock-date: 11px;
@@ -44,7 +44,7 @@
 
 :root[data-size="large"] {
   --bar: 64px;
-  --icon: 36px;
+  --icon: 32px;
   --tile-radius: 12px;
   --clock-time: 20px;
   --clock-date: 13px;

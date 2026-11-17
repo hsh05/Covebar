@@ -54,6 +54,9 @@ pub struct AppsSnapshot {
 static DIRTY: AtomicBool = AtomicBool::new(true);
 static LAST_FG: AtomicIsize = AtomicIsize::new(0);
 static SEQ: AtomicU64 = AtomicU64::new(1);
+/// Whether Start/search was the foreground window, and when it last stopped being it.
+static SHELL_FG: AtomicBool = AtomicBool::new(false);
+static SHELL_LOST_AT: Mutex<Option<Instant>> = Mutex::new(None);
 
 #[derive(Default)]
 struct Book {
@@ -106,8 +109,26 @@ unsafe extern "system" fn win_event(
     }
     if event == EVENT_SYSTEM_FOREGROUND {
         note_foreground(h);
+        let shell = win::is_shell_ui(h);
+        if SHELL_FG.swap(shell, Ordering::SeqCst) && !shell {
+            *SHELL_LOST_AT.lock().unwrap() = Some(Instant::now());
+        }
     }
     DIRTY.store(true, Ordering::Relaxed);
+}
+
+unsafe extern "system" fn own_foreground(
+    _hook: HWINEVENTHOOK,
+    _event: u32,
+    _h: HWND,
+    id_object: i32,
+    _id_child: i32,
+    _thread: u32,
+    _time: u32,
+) {
+    if id_object == OBJID_WINDOW.0 && SHELL_FG.swap(false, Ordering::SeqCst) {
+        *SHELL_LOST_AT.lock().unwrap() = Some(Instant::now());
+    }
 }
 
 /// Start the event hook thread and the refresh loop that emits `apps-changed`.
@@ -125,6 +146,17 @@ pub fn start(app: AppHandle) {
         ] {
             SetWinEventHook(a, b, None, Some(win_event), 0, 0, flags);
         }
+        // Also see our own windows take the foreground, so we know when a click on the
+        // dock is what just dismissed Start.
+        SetWinEventHook(
+            EVENT_SYSTEM_FOREGROUND,
+            EVENT_SYSTEM_FOREGROUND,
+            None,
+            Some(own_foreground),
+            std::process::id(),
+            0,
+            WINEVENT_OUTOFCONTEXT,
+        );
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             let _ = TranslateMessage(&msg);
@@ -414,7 +446,11 @@ fn build_snapshot(pins: &[Pin]) -> AppsSnapshot {
         let tgt = pin.target.as_ref().map(|t| t.to_lowercase());
         let mut windows = Vec::new();
         groups.retain(|(key, aumid, exe, wins)| {
-            let hit = (pin.aumid.is_some() && pin.aumid == *aumid)
+            let explorer = pin.aumid.as_deref() == Some("Microsoft.Windows.Explorer")
+                && aumid.is_none()
+                && win::file_stem_lower(exe) == "explorer";
+            let hit = explorer
+                || (pin.aumid.is_some() && pin.aumid == *aumid)
                 || (aumid.is_none() && tgt.as_deref() == Some(exe.to_lowercase().as_str()))
                 || (pin.aumid.is_some() && pin.aumid.as_deref() == Some(key.as_str()));
             if hit {
@@ -540,8 +576,17 @@ pub fn launch(target: &str) {
     }
 }
 
-/// Open the Start menu by pressing the Windows key.
+/// Toggle the Start menu by pressing the Windows key. If clicking the dock is what just
+/// closed Start, leave it closed.
 pub fn open_start() {
+    let just_closed = SHELL_LOST_AT
+        .lock()
+        .unwrap()
+        .take()
+        .is_some_and(|t| t.elapsed() < Duration::from_millis(600));
+    if just_closed {
+        return;
+    }
     let key = |up: bool| INPUT {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
@@ -554,5 +599,22 @@ pub fn open_start() {
     };
     unsafe {
         SendInput(&[key(false), key(true)], std::mem::size_of::<INPUT>() as i32);
+    }
+}
+
+/// Debug aid: write every dock app's icon (as the bar would get it) to `dir` as PNG files.
+pub fn dump_icons(dir: &str) {
+    icons::com_init();
+    let snap = build_snapshot(&read_pins());
+    let _ = std::fs::create_dir_all(dir);
+    for (i, a) in snap.apps.iter().enumerate() {
+        let url = icons::icon_data_url(&a.icon, 64);
+        println!("{i:02} pinned={} name={:?} key={:?} ok={}", a.pinned, a.name, a.icon, url.is_some());
+        if let Some(b64) = url.as_deref().and_then(|u| u.split_once(',')).map(|(_, b)| b) {
+            use base64::Engine;
+            if let Ok(png) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                let _ = std::fs::write(format!("{dir}/{i:02}.png"), png);
+            }
+        }
     }
 }
