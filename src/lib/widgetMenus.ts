@@ -36,6 +36,8 @@ export async function widgetMenu(id: string, openCard: () => void): Promise<Menu
         },
         { label: "Next track", icon: "next", disabled: !m.canNext, action: cmd("next") },
         { label: "Previous track", icon: "prev", disabled: !m.canPrev, action: cmd("prev") },
+        { separator: true },
+        { label: `Open ${m.sourceName}`, icon: "open", action: () => invoke("open_media_source", { source: m.source }) },
       ];
     }
     case "timer": {

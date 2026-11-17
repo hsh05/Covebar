@@ -222,7 +222,7 @@ pub struct AppVolume {
 
 /// Names an app's processes might go by, from its media AppUserModelID:
 /// "Spotify.exe" -> spotify, "MSEdge" -> msedge, "SpotifyAB.SpotifyMusic_zpd...!Spotify" -> spotifyab.spotifymusic.
-fn app_tokens(aumid: &str) -> Vec<String> {
+pub(crate) fn app_tokens(aumid: &str) -> Vec<String> {
     let lower = aumid.to_lowercase();
     let base = lower.split('!').next().unwrap_or(&lower);
     let exe = base.rsplit(['\\', '/']).next().unwrap_or(base).trim_end_matches(".exe");

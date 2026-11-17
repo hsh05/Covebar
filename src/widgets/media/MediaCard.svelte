@@ -118,10 +118,11 @@
         {/key}
       </div>
       <div class="meta">
-        <div class="source">
+        <button class="source" onclick={() => invoke("open_media_source", { source: m.source })} title="Open {m.sourceName}">
           {#if sourceIcon}<img src={sourceIcon} alt="" width="14" height="14" />{/if}
           <span>{m.sourceName}</span>
-        </div>
+          <span class="go"><Icon name="open" size={11} /></span>
+        </button>
         {#key m.title}
           <div class="title" in:fade={{ duration: 200 }}>{m.title}</div>
         {/key}
@@ -248,12 +249,34 @@
     padding-top: 2px;
   }
   .source {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
+    max-width: 100%;
+    margin: 0 0 4px -6px;
+    padding: 2px 6px;
+    border-radius: 6px;
     font-size: 11px;
     color: var(--text-faint);
-    margin-bottom: 4px;
+    transition:
+      background-color var(--t-fast) var(--ease-out),
+      color var(--t-fast) var(--ease-out);
+  }
+  .source:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .source .go {
+    display: grid;
+    opacity: 0;
+    transform: translate(-3px, 2px);
+    transition:
+      opacity 160ms var(--ease-out),
+      transform 200ms var(--ease-out);
+  }
+  .source:hover .go {
+    opacity: 1;
+    transform: none;
   }
   .title {
     font: 600 15px/1.25 var(--font-display);

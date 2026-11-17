@@ -573,6 +573,31 @@ pub fn click_app(hwnds: &[isize]) {
     activate(hwnd(target));
 }
 
+/// Bring the app playing media (by its media-session app id) to the front, most recently
+/// used window first; start it if it has no window.
+pub fn open_media_source(aumid: &str) {
+    let tokens = crate::audio::app_tokens(aumid);
+    let want = aumid.to_lowercase();
+    let wins: Vec<isize> = list_windows()
+        .into_iter()
+        .filter(|w| {
+            if w.aumid.as_deref().is_some_and(|a| a.to_lowercase() == want) {
+                return true;
+            }
+            let path = w.exe.to_lowercase();
+            let stem = win::file_stem_lower(&path);
+            !stem.is_empty() && tokens.iter().any(|t| *t == stem || path.contains(t.as_str()) || t.contains(stem.as_str()))
+        })
+        .map(|w| w.hwnd)
+        .collect();
+    let best = with_book(|b| wins.iter().copied().max_by_key(|h| b.last_active.get(h).copied().unwrap_or(0)));
+    match best {
+        Some(h) => activate(hwnd(h)),
+        None if !aumid.is_empty() => launch(&format!("shell:AppsFolder\\{aumid}")),
+        None => {}
+    }
+}
+
 pub fn close_window(h: isize) {
     unsafe {
         let _ = PostMessageW(Some(hwnd(h)), WM_CLOSE, WPARAM(0), LPARAM(0));

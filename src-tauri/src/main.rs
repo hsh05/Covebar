@@ -160,6 +160,11 @@ fn open_card(app: AppHandle, widget: String, anchor_x: f64, anchor_width: f64, w
 }
 
 #[tauri::command]
+fn open_media_source(source: String) {
+    std::thread::spawn(move || apps::open_media_source(&source));
+}
+
+#[tauri::command]
 fn resize_card(app: AppHandle, widget: String, height: f64) {
     popups::resize_card(&app, &widget, height);
 }
@@ -485,6 +490,7 @@ fn main() {
             get_settings,
             set_settings,
             resize_card,
+            open_media_source,
             get_tray,
             tray_click,
             get_temps,
