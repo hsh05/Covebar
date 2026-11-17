@@ -9,7 +9,9 @@ use tauri::window::{Effect, EffectsBuilder};
 use tauri::{AppHandle, Manager, Theme};
 use windows::Win32::Foundation::RECT;
 use windows::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTONULL};
-use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowRect};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetForegroundWindow, GetWindowLongW, GetWindowRect, IsZoomed, GWL_STYLE, WS_CAPTION,
+};
 
 const WINDOWS: [&str; 5] = ["dock", "card", "preview", "menu", "settings"];
 
@@ -95,6 +97,11 @@ fn fullscreen_on_primary() -> bool {
         }
         let mon = win::primary_monitor();
         if MonitorFromWindow(fg, MONITOR_DEFAULTTONULL) != mon {
+            return false;
+        }
+        // A normal maximized window (title bar intact) also fills the screen when the bar
+        // reserves no space, but it is not fullscreen: keep the bar on top of it.
+        if IsZoomed(fg).as_bool() && (GetWindowLongW(fg, GWL_STYLE) as u32 & WS_CAPTION.0) == WS_CAPTION.0 {
             return false;
         }
         let mut r = RECT::default();
