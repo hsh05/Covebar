@@ -20,7 +20,7 @@ use windows::Win32::Graphics::Dwm::{
 pub const PAD: f64 = 16.0;
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    for (label, w, h) in [("card", 320.0, 360.0), ("preview", 240.0, 180.0), ("menu", 240.0, 200.0), ("osd", OSD_SIZE, OSD_SIZE)] {
+    for (label, w, h) in [("card", 320.0, 360.0), ("preview", 240.0, 180.0), ("menu", 240.0, 200.0), ("osd", OSD_SIZE, OSD_SIZE), ("alarm", ALARM_W, ALARM_H)] {
         let win = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
             .title(app.package_info().name.clone())
             .decorations(false)
@@ -43,6 +43,53 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         }
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------- timer alarm
+
+/// Size (CSS px) of the "time's up" popup's content, without the shadow margin.
+const ALARM_W: f64 = 320.0;
+const ALARM_H: f64 = 124.0;
+static ALARM_SESSION: AtomicU64 = AtomicU64::new(0);
+
+/// Show the "time's up" popup next to the dock, over the timer tile when `anchor` (dock CSS
+/// x and width) is given, else over the middle of the dock. It doesn't take focus.
+pub fn show_alarm(app: &AppHandle, anchor: Option<(f64, f64)>, duration_ms: u64) {
+    let Some(w) = app.get_webview_window("alarm") else { return };
+    let Some(h) = win::tauri_hwnd(&w) else { return };
+    let me = ALARM_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
+    let center = match anchor {
+        Some((x, aw)) => anchor_center(app, x, aw),
+        None => {
+            let d = *app.state::<AppState>().dock.lock().unwrap();
+            d.x + d.w / 2
+        }
+    };
+    place_popup(app, &w, center, ALARM_W, ALARM_H);
+    let _ = app.emit_to("alarm", "alarm-show", serde_json::json!({ "session": me, "durationMs": duration_ms }));
+    win::show_no_activate(h);
+}
+
+pub fn alarm_session() -> u64 {
+    ALARM_SESSION.load(Ordering::SeqCst)
+}
+
+/// Play the alarm popup's exit animation, then hide it.
+pub fn hide_alarm(app: &AppHandle) {
+    let Some(w) = app.get_webview_window("alarm") else { return };
+    if !w.is_visible().unwrap_or(false) {
+        return;
+    }
+    let Some(h) = win::tauri_hwnd(&w) else { return };
+    let me = ALARM_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
+    let _ = app.emit_to("alarm", "alarm-out", ());
+    let hw = win::hval(h);
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(220));
+        if ALARM_SESSION.load(Ordering::SeqCst) == me {
+            win::hide(win::hwnd(hw));
+        }
+    });
 }
 
 // ---------------------------------------------------------------- on-screen display

@@ -20,4 +20,4 @@ export function timerFraction(t: TimerState, now: number) {
   return t.durationMs > 0 ? Math.min(1, timerLeft(t, now) / t.durationMs) : 0;
 }
 
-export const TIMER_CARD = { width: 300, height: 356 };
+export const TIMER_CARD = { width: 300, height: 412 };

@@ -26,11 +26,7 @@
   const current = $derived(elapsed - (sw.laps.at(-1) ?? 0));
 </script>
 
-<div class="card">
-  <div class="card-title">
-    <Icon name="stopwatch" size={16} />
-    <span class="grow">Stopwatch</span>
-  </div>
+<div class="pane">
 
   <div class="readout" class:paused={!running && sw.elapsedMs > 0}>
     {duration(elapsed, { hundredths: true })}
@@ -78,6 +74,13 @@
 </div>
 
 <style>
+  .pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+  }
   .readout {
     text-align: center;
     font: 600 40px/1.1 var(--font-display);

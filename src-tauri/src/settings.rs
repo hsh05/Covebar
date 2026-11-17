@@ -5,7 +5,7 @@ use std::path::Path;
 
 /// Widgets that exist in this build, in their default order.
 pub const KNOWN_WIDGETS: &[&str] =
-    &["apps", "media", "timer", "stopwatch", "recycle", "currency", "claude", "temperature", "brightness", "mic", "volume", "tray", "clock"];
+    &["apps", "media", "timer", "recycle", "currency", "claude", "temperature", "brightness", "mic", "volume", "tray", "clock"];
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -132,6 +132,12 @@ impl Default for Settings {
 impl Settings {
     /// Drop unknown or duplicate widgets and append any new ones.
     pub fn normalize(&mut self) {
+        // The stopwatch now lives in the timer widget: keep it on the bar if either was.
+        if self.widgets.iter().any(|w| w.id == "stopwatch" && w.enabled) {
+            for w in self.widgets.iter_mut().filter(|w| w.id == "timer") {
+                w.enabled = true;
+            }
+        }
         let mut seen = std::collections::HashSet::new();
         self.widgets
             .retain(|w| KNOWN_WIDGETS.contains(&w.id.as_str()) && seen.insert(w.id.clone()));

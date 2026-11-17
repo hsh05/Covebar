@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_notification::NotificationExt;
 use windows::core::PCWSTR;
 use windows::Win32::Media::Audio::{PlaySoundW, SND_ASYNC, SND_FILENAME, SND_LOOP, SND_NODEFAULT};
 
@@ -94,6 +93,9 @@ pub fn start(app: AppHandle, path: PathBuf) {
             } else if silence {
                 rang_at = 0;
                 stop_sound();
+                if let Some(app) = APP.get() {
+                    crate::popups::hide_alarm(app);
+                }
                 changed();
             }
         }
@@ -190,6 +192,9 @@ pub fn action(action: &str, value: Option<u64>) -> TimersState {
     });
     if was_ringing && !get().timer.ringing {
         stop_sound();
+        if let Some(app) = APP.get() {
+            crate::popups::hide_alarm(app);
+        }
     }
     if did {
         changed();
@@ -205,18 +210,19 @@ fn ring() {
     unsafe {
         let _ = PlaySoundW(PCWSTR(p.as_ptr()), None, SND_FILENAME | SND_ASYNC | SND_LOOP | SND_NODEFAULT);
     }
-    if let Some(app) = APP.get() {
-        let _ = app.emit("timer-done", ());
-        let r = app
-            .notification()
-            .builder()
-            .title("Timer finished")
-            .body("Your timer is done. Click the timer on the bar to dismiss the alarm.")
-            .show();
-        if let Err(e) = r {
-            crate::dlog!("notification: {e}");
+    let Some(app) = APP.get() else { return };
+    // The dock answers with the timer tile's position (show_alarm); if it doesn't (the tile
+    // is hidden, or the dock is busy), show the popup over the middle of the dock anyway.
+    let duration = get().timer.duration_ms;
+    let before = crate::popups::alarm_session();
+    let _ = app.emit("timer-done", duration);
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(600));
+        if crate::popups::alarm_session() == before && get().timer.ringing {
+            crate::popups::show_alarm(&app, None, duration);
         }
-    }
+    });
 }
 
 fn stop_sound() {

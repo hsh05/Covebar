@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
   import { tick, untrack } from "svelte";
   import { flip } from "svelte/animate";
   import { cubicOut } from "svelte/easing";
@@ -12,6 +13,12 @@
 
   let appName = $state("Covebar");
   getName().then((n) => (appName = n));
+
+  // A timer ended: show the "time's up" popup over the timer tile.
+  listen("timer-done", () => {
+    const r = document.querySelector('[data-id="timer"]')?.getBoundingClientRect();
+    invoke("show_alarm", { anchorX: r?.left ?? null, anchorWidth: r?.width ?? null });
+  });
 
   const shownIds = $derived((store.s?.widgets ?? []).filter((w) => w.enabled && WIDGETS[w.id]).map((w) => w.id));
   const edge = $derived<Edge>(store.s?.edge ?? "bottom");

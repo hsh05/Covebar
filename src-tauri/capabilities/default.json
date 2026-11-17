@@ -2,6 +2,6 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Permissions for all Covebar windows",
-  "windows": ["dock", "card", "preview", "menu", "settings", "osd"],
+  "windows": ["dock", "card", "preview", "menu", "settings", "osd", "alarm"],
   "permissions": ["core:default"]
 }

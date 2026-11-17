@@ -298,6 +298,14 @@ fn open_recycle() {
 }
 
 #[tauri::command]
+fn show_alarm(app: AppHandle, anchor_x: Option<f64>, anchor_width: Option<f64>) {
+    if timers::get().timer.ringing {
+        let d = timers::get().timer.duration_ms;
+        popups::show_alarm(&app, anchor_x.zip(anchor_width), d);
+    }
+}
+
+#[tauri::command]
 fn get_timers() -> timers::TimersState {
     timers::get()
 }
@@ -484,7 +492,6 @@ fn main() {
             let _ = show_settings(app);
         }))
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
-        .plugin(tauri_plugin_notification::init())
         .setup(setup)
         .invoke_handler(tauri::generate_handler![
             get_settings,
@@ -536,6 +543,7 @@ fn main() {
             open_recycle,
             get_timers,
             timers_action,
+            show_alarm,
             get_hotkey_status,
             pause_hotkeys,
             open_settings,

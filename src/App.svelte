@@ -7,6 +7,7 @@
   import Menu from "./views/Menu.svelte";
   import Settings from "./views/Settings.svelte";
   import Osd from "./views/Osd.svelte";
+  import Alarm from "./views/Alarm.svelte";
 
   const label = getCurrentWebviewWindow().label;
   const ready = initSettings();
@@ -38,5 +39,7 @@
     <Settings />
   {:else if label === "osd"}
     <Osd />
+  {:else if label === "alarm"}
+    <Alarm />
   {/if}
 {/await}

@@ -6,8 +6,6 @@ import MediaTile from "../widgets/media/MediaTile.svelte";
 import MediaCard from "../widgets/media/MediaCard.svelte";
 import TimerTile from "../widgets/timer/TimerTile.svelte";
 import TimerCard from "../widgets/timer/TimerCard.svelte";
-import StopwatchTile from "../widgets/stopwatch/StopwatchTile.svelte";
-import StopwatchCard from "../widgets/stopwatch/StopwatchCard.svelte";
 import RecycleTile from "../widgets/recycle/RecycleTile.svelte";
 import RecycleCard from "../widgets/recycle/RecycleCard.svelte";
 import BrightnessTile from "../widgets/brightness/BrightnessTile.svelte";
@@ -53,17 +51,10 @@ export const WIDGETS: Record<string, WidgetDef> = {
   },
   timer: {
     id: "timer",
-    name: "Timer",
-    description: "Countdown with presets; rings and notifies you when it ends",
+    name: "Timer & Stopwatch",
+    description: "Countdown with presets that rings when it ends, and a stopwatch with laps",
     tile: TimerTile,
     card: TimerCard,
-  },
-  stopwatch: {
-    id: "stopwatch",
-    name: "Stopwatch",
-    description: "Stopwatch with laps that are kept across restarts",
-    tile: StopwatchTile,
-    card: StopwatchCard,
   },
   recycle: {
     id: "recycle",

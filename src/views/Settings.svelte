@@ -243,7 +243,7 @@
           {/if}
         </div>
       </div>
-      <p class="note">When a timer ends you get a notification and an alarm that rings until you dismiss it.</p>
+      <p class="note">When a timer ends, a popup appears above the timer and an alarm rings until you dismiss it.</p>
     {:else if section === "Clock"}
       <div class="group">
         {@render toggleRow("24-hour time", "Show 14:05 instead of 2:05 PM", "clock24h")}

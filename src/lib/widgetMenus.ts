@@ -43,38 +43,39 @@ export async function widgetMenu(id: string, openCard: () => void): Promise<Menu
     case "timer": {
       const t = timers().v.timer;
       const phase = timerPhase(t);
-      if (phase === "ringing")
-        return [
-          { label: "Dismiss", icon: "check", action: () => timersAction("timerDismiss") },
-          { label: "Restart", icon: "reset", action: () => timersAction("timerStart", Math.round(t.durationMs / 1000)) },
-        ];
-      if (phase === "running")
-        return [
-          { label: "Pause", icon: "pause", action: () => timersAction("timerPause") },
-          { label: "Add a minute", icon: "plus", action: () => timersAction("timerAdd", 60) },
-          { label: "Cancel timer", icon: "close", danger: true, action: () => timersAction("timerReset") },
-        ];
-      if (phase === "paused")
-        return [
-          { label: "Resume", icon: "play", action: () => timersAction("timerResume") },
-          { label: "Cancel timer", icon: "close", danger: true, action: () => timersAction("timerReset") },
-        ];
-      return (s?.timerPresets ?? []).slice(0, 6).map((sec) => ({
-        label: `Start ${duration(sec)}`,
-        icon: "timer" as const,
-        action: () => timersAction("timerStart", sec),
-      }));
-    }
-    case "stopwatch": {
+      const timerItems: MenuEntry[] =
+        phase === "ringing"
+          ? [
+              { label: "Dismiss", icon: "check", action: () => timersAction("timerDismiss") },
+              { label: "Restart", icon: "reset", action: () => timersAction("timerStart", Math.round(t.durationMs / 1000)) },
+            ]
+          : phase === "running"
+            ? [
+                { label: "Pause timer", icon: "pause", action: () => timersAction("timerPause") },
+                { label: "Add a minute", icon: "plus", action: () => timersAction("timerAdd", 60) },
+                { label: "Cancel timer", icon: "close", danger: true, action: () => timersAction("timerReset") },
+              ]
+            : phase === "paused"
+              ? [
+                  { label: "Resume timer", icon: "play", action: () => timersAction("timerResume") },
+                  { label: "Cancel timer", icon: "close", danger: true, action: () => timersAction("timerReset") },
+                ]
+              : (s?.timerPresets ?? []).slice(0, 5).map((sec) => ({
+                  label: `Start ${duration(sec)}`,
+                  icon: "timer" as const,
+                  action: () => timersAction("timerStart", sec),
+                }));
       const sw = timers().v.stopwatch;
       const running = sw.startedAt != null;
-      return [
+      const swItems: MenuEntry[] = [
         running
-          ? { label: "Pause", icon: "pause", action: () => timersAction("swPause") }
-          : { label: sw.elapsedMs ? "Resume" : "Start", icon: "play", action: () => timersAction("swStart") },
-        { label: "Lap", icon: "flag", disabled: !running, action: () => timersAction("swLap") },
-        { label: "Reset", icon: "reset", disabled: !running && sw.elapsedMs === 0, action: () => timersAction("swReset") },
+          ? { label: "Pause stopwatch", icon: "pause", action: () => timersAction("swPause") }
+          : { label: sw.elapsedMs ? "Resume stopwatch" : "Start stopwatch", icon: "play", action: () => timersAction("swStart") },
       ];
+      if (running) swItems.push({ label: "Lap", icon: "flag", action: () => timersAction("swLap") });
+      if (running || sw.elapsedMs > 0)
+        swItems.push({ label: "Reset stopwatch", icon: "reset", action: () => timersAction("swReset") });
+      return [...timerItems, { separator: true }, ...swItems];
     }
     case "recycle": {
       const empty = recycle().v.items === 0;
