@@ -3,14 +3,17 @@
   import { invoke } from "@tauri-apps/api/core";
   import { store, updateSettings } from "../lib/settings.svelte";
   import { WIDGETS } from "../lib/widgets";
-  import type { Settings, WidgetEntry } from "../lib/types";
+  import type { Hotkeys, Settings, WidgetEntry } from "../lib/types";
+  import { hotkeyStatus } from "../lib/live.svelte";
+  import { presetLabel } from "../lib/format";
+  import ShortcutRecorder from "./ShortcutRecorder.svelte";
 
   let appName = $state("Covebar");
   let version = $state("");
   getName().then((n) => (appName = n));
   getVersion().then((v) => (version = v));
 
-  const sections = ["General", "Appearance", "Widgets", "Clock", "About"] as const;
+  const sections = ["General", "Appearance", "Widgets", "Shortcuts", "Clock", "Timer", "About"] as const;
   let section = $state<(typeof sections)[number]>("General");
   let error = $state("");
 
@@ -21,6 +24,22 @@
     } catch (e) {
       error = String(e);
     }
+  }
+
+  // ---- shortcuts and timer presets
+  const keys = hotkeyStatus();
+  const DEFAULT_KEYS: Hotkeys = { micMute: "Win+Alt+M", speakerMute: "Win+Alt+S" };
+  function setKey(k: keyof Hotkeys, v: string) {
+    set("hotkeys", { ...s.hotkeys, [k]: v });
+  }
+
+  let newPreset = $state("");
+  function addPreset() {
+    const min = parseFloat(newPreset.replace(",", "."));
+    if (!(min > 0 && min <= 1440)) return;
+    const sec = Math.round(min * 60);
+    newPreset = "";
+    if (!s.timerPresets.includes(sec)) set("timerPresets", [...s.timerPresets, sec].sort((a, b) => a - b));
   }
 
   // ---- widgets: drag between "In the bar" and "Hidden", or reorder within a list
@@ -170,6 +189,51 @@
       {@render widgetList("shown", shown)}
       <h2>Hidden</h2>
       {@render widgetList("hidden", hidden)}
+    {:else if section === "Shortcuts"}
+      <div class="group">
+        {#each [["micMute", "Mute microphone", "Turns your microphone on or off"], ["speakerMute", "Mute speakers", "Turns the sound output on or off"]] as [k, label, hint] (k)}
+          {@const key = k as keyof Hotkeys}
+          <div class="row">
+            <span class="text"><span class="label">{label}</span><span class="hint">{hint}</span></span>
+            <div>
+              <ShortcutRecorder
+                value={s.hotkeys[key]}
+                fallback={DEFAULT_KEYS[key]}
+                status={keys.v[key]}
+                onchange={(v) => setKey(key, v)}
+              />
+            </div>
+          </div>
+        {/each}
+      </div>
+      <p class="note">Shortcuts work everywhere, even while a game or another app is in front.</p>
+    {:else if section === "Timer"}
+      <div class="group">
+        <div class="row presets-row">
+          <span class="text">
+            <span class="label">Presets</span>
+            <span class="hint">One-click durations on the timer card</span>
+          </span>
+        </div>
+        <div class="presets">
+          {#each s.timerPresets as sec (sec)}
+            <span class="preset">
+              {presetLabel(sec)}
+              <button
+                aria-label="Remove {presetLabel(sec)}"
+                onclick={() => set("timerPresets", s.timerPresets.filter((x) => x !== sec))}>×</button
+              >
+            </span>
+          {/each}
+          {#if s.timerPresets.length < 8}
+            <form class="add" onsubmit={(e) => (e.preventDefault(), addPreset())}>
+              <input type="text" inputmode="decimal" placeholder="Minutes" bind:value={newPreset} />
+              <button type="submit" disabled={!newPreset.trim()}>Add</button>
+            </form>
+          {/if}
+        </div>
+      </div>
+      <p class="note">When a timer ends you get a notification and an alarm that rings until you dismiss it.</p>
     {:else if section === "Clock"}
       <div class="group">
         {@render toggleRow("24-hour time", "Show 14:05 instead of 2:05 PM", "clock24h")}
@@ -389,6 +453,64 @@
     padding: 14px;
     text-align: center;
     color: var(--text-faint);
+  }
+  .presets-row {
+    min-height: 0;
+    padding-bottom: 4px;
+  }
+  .presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px 16px 14px;
+  }
+  .preset {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 4px 0 11px;
+    border-radius: 14px;
+    background: var(--pressed);
+    border: 1px solid var(--line);
+    font-size: 12px;
+  }
+  .preset button {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    color: var(--text-dim);
+  }
+  .preset button:hover {
+    background: var(--hover);
+    color: var(--danger);
+  }
+  .add {
+    display: inline-flex;
+    gap: 4px;
+  }
+  .add input {
+    width: 80px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--pressed);
+    color: inherit;
+    font: inherit;
+    font-size: 12px;
+  }
+  .add button {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 14px;
+    color: var(--accent);
+  }
+  .add button:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .add button:disabled {
+    opacity: 0.4;
   }
   .about p {
     margin: 0;
