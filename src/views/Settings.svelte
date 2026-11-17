@@ -1,0 +1,420 @@
+<script lang="ts">
+  import { getName, getVersion } from "@tauri-apps/api/app";
+  import { invoke } from "@tauri-apps/api/core";
+  import { store, updateSettings } from "../lib/settings.svelte";
+  import { WIDGETS } from "../lib/widgets";
+  import type { Settings, WidgetEntry } from "../lib/types";
+
+  let appName = $state("Covebar");
+  let version = $state("");
+  getName().then((n) => (appName = n));
+  getVersion().then((v) => (version = v));
+
+  const sections = ["General", "Appearance", "Widgets", "Clock", "About"] as const;
+  let section = $state<(typeof sections)[number]>("General");
+  let error = $state("");
+
+  async function set<K extends keyof Settings>(key: K, value: Settings[K]) {
+    error = "";
+    try {
+      await updateSettings({ [key]: value } as Partial<Settings>);
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  // ---- widgets: drag between "In the bar" and "Hidden", or reorder within a list
+  const s = $derived(store.s!);
+  const shown = $derived(s.widgets.filter((w) => w.enabled && WIDGETS[w.id]));
+  const hidden = $derived(s.widgets.filter((w) => !w.enabled && WIDGETS[w.id]));
+
+  let dragId = $state<string | null>(null);
+  let dropAt = $state<{ list: "shown" | "hidden"; index: number } | null>(null);
+
+  function overItem(list: "shown" | "hidden", index: number, e: DragEvent) {
+    e.preventDefault();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    dropAt = { list, index: e.clientY > r.top + r.height / 2 ? index + 1 : index };
+  }
+  function overList(list: "shown" | "hidden", len: number, e: DragEvent) {
+    e.preventDefault();
+    if (e.target === e.currentTarget) dropAt = { list, index: len };
+  }
+  function drop(e: DragEvent) {
+    e.preventDefault();
+    if (!dragId || !dropAt) return finish();
+    const id = dragId;
+    const lists = {
+      shown: shown.map((w) => w.id).filter((x) => x !== id),
+      hidden: hidden.map((w) => w.id).filter((x) => x !== id),
+    };
+    const src = shown.findIndex((w) => w.id === id);
+    let idx = dropAt.index;
+    if (dropAt.list === "shown" && src !== -1 && src < idx) idx--;
+    const hsrc = hidden.findIndex((w) => w.id === id);
+    if (dropAt.list === "hidden" && hsrc !== -1 && hsrc < idx) idx--;
+    lists[dropAt.list].splice(idx, 0, id);
+    const widgets: WidgetEntry[] = [
+      ...lists.shown.map((id) => ({ id, enabled: true })),
+      ...lists.hidden.map((id) => ({ id, enabled: false })),
+    ];
+    finish();
+    set("widgets", widgets);
+  }
+  function finish() {
+    dragId = null;
+    dropAt = null;
+  }
+  function toggle(id: string) {
+    set(
+      "widgets",
+      s.widgets.map((w) => (w.id === id ? { ...w, enabled: !w.enabled } : w)),
+    );
+  }
+</script>
+
+{#snippet toggleRow(label: string, hint: string, key: "autostart" | "hideTaskbar" | "clock24h" | "clockSeconds" | "weekStartsMonday")}
+  <label class="row">
+    <span class="text"><span class="label">{label}</span><span class="hint">{hint}</span></span>
+    <input type="checkbox" class="switch" checked={s[key]} onchange={(e) => set(key, e.currentTarget.checked)} />
+  </label>
+{/snippet}
+
+{#snippet choice<T extends string>(label: string, value: T, options: [T, string][], onpick: (v: T) => void)}
+  <div class="row">
+    <span class="text"><span class="label">{label}</span></span>
+    <div class="seg" role="radiogroup" aria-label={label}>
+      {#each options as [v, text]}
+        <button role="radio" aria-checked={value === v} class:on={value === v} onclick={() => onpick(v)}>{text}</button>
+      {/each}
+    </div>
+  </div>
+{/snippet}
+
+{#snippet widgetList(list: "shown" | "hidden", items: WidgetEntry[])}
+  <ul
+    class="wlist"
+    class:target={dropAt?.list === list}
+    ondragover={(e) => overList(list, items.length, e)}
+    ondrop={drop}
+    ondragleave={(e) => e.target === e.currentTarget && (dropAt = null)}
+  >
+    {#each items as w, i (w.id)}
+      <li
+        class="witem"
+        class:dragging={dragId === w.id}
+        class:before={dropAt?.list === list && dropAt.index === i}
+        class:after={dropAt?.list === list && dropAt.index === i + 1 && i === items.length - 1}
+        draggable="true"
+        ondragstart={(e) => {
+          dragId = w.id;
+          e.dataTransfer?.setData("text/plain", w.id);
+        }}
+        ondragend={finish}
+        ondragover={(e) => overItem(list, i, e)}
+      >
+        <svg class="grip" viewBox="0 0 10 16" aria-hidden="true">
+          <circle cx="3" cy="3" r="1.3" /><circle cx="7" cy="3" r="1.3" /><circle cx="3" cy="8" r="1.3" />
+          <circle cx="7" cy="8" r="1.3" /><circle cx="3" cy="13" r="1.3" /><circle cx="7" cy="13" r="1.3" />
+        </svg>
+        <span class="text">
+          <span class="label">{WIDGETS[w.id].name}</span>
+          <span class="hint">{WIDGETS[w.id].description}</span>
+        </span>
+        <input type="checkbox" class="switch" checked={w.enabled} onchange={() => toggle(w.id)} aria-label="Show {WIDGETS[w.id].name}" />
+      </li>
+    {:else}
+      <li class="empty">Drop widgets here</li>
+    {/each}
+  </ul>
+{/snippet}
+
+<div class="settings">
+  <nav>
+    <div class="brand">
+      <img src="/brand.svg" alt="" width="28" height="28" />
+      <span>{appName}</span>
+    </div>
+    {#each sections as name}
+      <button class:on={section === name} onclick={() => (section = name)}>{name}</button>
+    {/each}
+  </nav>
+
+  <section class="content">
+    <h1>{section}</h1>
+    {#if error}<p class="error">{error}</p>{/if}
+
+    {#if section === "General"}
+      <div class="group">
+        {@render toggleRow("Start with Windows", `Launch ${appName} when you sign in`, "autostart")}
+        {@render toggleRow(
+          "Hide the Windows taskbar",
+          `The taskbar comes back when ${appName} quits, even after a crash`,
+          "hideTaskbar",
+        )}
+      </div>
+      <div class="group">
+        {@render choice("Position", s.edge, [["bottom", "Bottom"], ["top", "Top"]], (v) => set("edge", v))}
+      </div>
+      <p class="note">You can also drag the bar's empty space to the top or bottom of the screen.</p>
+    {:else if section === "Appearance"}
+      <div class="group">
+        {@render choice("Theme", s.theme, [["system", "System"], ["dark", "Dark"], ["light", "Light"]], (v) => set("theme", v))}
+        {@render choice("Size", s.size, [["small", "Small"], ["large", "Large"]], (v) => set("size", v))}
+        {@render choice("Background", s.material, [["acrylic", "Acrylic"], ["mica", "Mica"]], (v) => set("material", v))}
+      </div>
+      <p class="note">Mica needs Windows 11; on Windows 10 the bar uses Acrylic.</p>
+    {:else if section === "Widgets"}
+      <p class="note top">Drag widgets to reorder them or move them between the lists.</p>
+      <h2>In the bar</h2>
+      {@render widgetList("shown", shown)}
+      <h2>Hidden</h2>
+      {@render widgetList("hidden", hidden)}
+    {:else if section === "Clock"}
+      <div class="group">
+        {@render toggleRow("24-hour time", "Show 14:05 instead of 2:05 PM", "clock24h")}
+        {@render toggleRow("Show seconds", "Show seconds in the bar", "clockSeconds")}
+        {@render toggleRow("Week starts on Monday", "Used by the calendar card", "weekStartsMonday")}
+      </div>
+    {:else if section === "About"}
+      <div class="group about">
+        <p><strong>{appName}</strong> {version}</p>
+        <p class="hint">A dock and widget bar for Windows. MIT licensed.</p>
+        <p class="hint">
+          If the Windows taskbar ever stays hidden, run <code>{appName.toLowerCase()}.exe --restore-taskbar</code>.
+        </p>
+      </div>
+      <button class="danger" onclick={() => invoke("quit")}>Quit {appName}</button>
+    {/if}
+  </section>
+</div>
+
+<style>
+  .settings {
+    display: flex;
+    height: 100vh;
+    user-select: none;
+  }
+  nav {
+    width: 200px;
+    flex: none;
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 10px 16px;
+    font: 600 15px var(--font-display);
+  }
+  nav button {
+    text-align: left;
+    padding: 8px 12px;
+    border-radius: 6px;
+    position: relative;
+  }
+  nav button:hover {
+    background: var(--hover);
+  }
+  nav button.on {
+    background: var(--raised);
+    font-weight: 600;
+  }
+  nav button.on::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 9px;
+    bottom: 9px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 28px 28px;
+    background: var(--card-tint);
+    border-top-left-radius: 8px;
+    border-left: 1px solid var(--line);
+    border-top: 1px solid var(--line);
+  }
+  h1 {
+    font: 600 26px var(--font-display);
+    margin: 4px 0 18px;
+  }
+  h2 {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 18px 0 8px;
+  }
+  .group {
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 10px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    min-height: 60px;
+  }
+  .row + .row {
+    border-top: 1px solid var(--line);
+  }
+  .text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .hint {
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .note {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin: 6px 2px 0;
+  }
+  .note.top {
+    margin: 0 0 4px;
+  }
+  .error {
+    color: var(--danger);
+  }
+  .switch {
+    appearance: none;
+    flex: none;
+    width: 40px;
+    height: 20px;
+    border-radius: 10px;
+    border: 1px solid var(--text-dim);
+    position: relative;
+    transition: background-color 120ms;
+    margin: 0;
+  }
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: transform 140ms ease;
+  }
+  .switch:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .switch:checked::after {
+    background: var(--accent-text);
+    transform: translateX(20px);
+  }
+  .seg {
+    display: flex;
+    background: var(--pressed);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 2px;
+  }
+  .seg button {
+    padding: 5px 14px;
+    border-radius: 5px;
+  }
+  .seg button:hover:not(.on) {
+    background: var(--hover);
+  }
+  .seg button.on {
+    background: var(--accent);
+    color: var(--accent-text);
+    font-weight: 600;
+  }
+  .wlist {
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    min-height: 56px;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    transition: border-color 120ms;
+  }
+  .wlist.target {
+    border-color: var(--accent);
+  }
+  .witem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: var(--raised);
+    margin: 3px 0;
+    cursor: grab;
+    position: relative;
+  }
+  .witem.dragging {
+    opacity: 0.4;
+  }
+  .witem.before::before,
+  .witem.after::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--accent);
+  }
+  .witem.before::before {
+    top: -4px;
+  }
+  .witem.after::after {
+    bottom: -4px;
+  }
+  .grip {
+    width: 10px;
+    height: 16px;
+    fill: var(--text-faint);
+    flex: none;
+  }
+  .empty {
+    padding: 14px;
+    text-align: center;
+    color: var(--text-faint);
+  }
+  .about p {
+    margin: 0;
+    padding: 6px 16px;
+  }
+  .about p:first-child {
+    padding-top: 14px;
+  }
+  .about p:last-child {
+    padding-bottom: 14px;
+  }
+  code {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 11.5px;
+    background: var(--pressed);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .danger {
+    margin-top: 8px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    color: var(--danger);
+  }
+  .danger:hover {
+    background: var(--hover);
+  }
+</style>

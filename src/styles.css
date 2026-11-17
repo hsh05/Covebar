@@ -1,0 +1,104 @@
+/* Covebar design tokens. Themes are switched with data-theme on <html>. */
+:root {
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+
+  --bar: 48px;
+  --icon: 26px;
+  --tile-radius: 9px;
+  --clock-time: 15px;
+  --clock-date: 11px;
+
+  color-scheme: dark;
+  --tint: rgba(16, 22, 26, 0.42);
+  --card-tint: rgba(18, 24, 28, 0.62);
+  --raised: rgba(255, 255, 255, 0.06);
+  --hover: rgba(255, 255, 255, 0.09);
+  --pressed: rgba(255, 255, 255, 0.05);
+  --line: rgba(255, 255, 255, 0.09);
+  --text: #edf4f3;
+  --text-dim: rgba(237, 244, 243, 0.62);
+  --text-faint: rgba(237, 244, 243, 0.38);
+  --accent: #5ccfbc;
+  --accent-text: #06231f;
+  --accent-soft: rgba(92, 207, 188, 0.18);
+  --danger: #ff8a7a;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --tint: rgba(246, 249, 249, 0.46);
+  --card-tint: rgba(250, 252, 252, 0.7);
+  --raised: rgba(0, 0, 0, 0.04);
+  --hover: rgba(0, 0, 0, 0.065);
+  --pressed: rgba(0, 0, 0, 0.04);
+  --line: rgba(0, 0, 0, 0.09);
+  --text: #0f1f1e;
+  --text-dim: rgba(15, 31, 30, 0.64);
+  --text-faint: rgba(15, 31, 30, 0.4);
+  --accent: #0e8475;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(14, 132, 117, 0.14);
+  --danger: #c4361f;
+}
+
+:root[data-size="large"] {
+  --bar: 64px;
+  --icon: 36px;
+  --tile-radius: 12px;
+  --clock-time: 20px;
+  --clock-date: 13px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  color: var(--text);
+  font: 13px/1.35 var(--font);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+}
+
+#app {
+  height: 100%;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: default;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(var(--bar) - 8px);
+  border-radius: var(--tile-radius);
+  transition: background-color 120ms ease;
+}
+
+.tile:hover {
+  background: var(--hover);
+}
+
+.tile:active {
+  background: var(--pressed);
+}

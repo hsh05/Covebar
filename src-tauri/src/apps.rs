@@ -1,0 +1,558 @@
+//! The Apps widget backend: open windows grouped by app, taskbar pins, and window actions.
+
+use crate::icons;
+use crate::win::{self, hval, hwnd, wide};
+use serde::Serialize;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter};
+use windows::core::{Interface, BOOL, PCWSTR};
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
+use windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_ID;
+use windows::Win32::Storage::FileSystem::{
+    GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW, WIN32_FIND_DATAW,
+};
+use windows::Win32::System::Com::{CoCreateInstance, IPersistFile, CLSCTX_INPROC_SERVER, STGM_READ};
+use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_LWIN,
+};
+use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, SHGetPropertyStoreForWindow};
+use windows::Win32::UI::Shell::{IShellLinkW, ShellExecuteW, ShellLink};
+use windows::Win32::UI::WindowsAndMessaging::*;
+
+#[derive(Serialize, Clone, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WinInfo {
+    pub hwnd: isize,
+    pub title: String,
+    pub minimized: bool,
+}
+
+#[derive(Serialize, Clone, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DockApp {
+    pub key: String,
+    pub name: String,
+    pub icon: String,
+    pub pinned: bool,
+    pub launch: Option<String>,
+    pub windows: Vec<WinInfo>,
+}
+
+#[derive(Serialize, Clone, PartialEq, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AppsSnapshot {
+    pub apps: Vec<DockApp>,
+    pub active: isize,
+}
+
+static DIRTY: AtomicBool = AtomicBool::new(true);
+static LAST_FG: AtomicIsize = AtomicIsize::new(0);
+static SEQ: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Default)]
+struct Book {
+    /// When each window was first seen, for a stable order.
+    first_seen: HashMap<isize, u64>,
+    /// When each window was last in the foreground.
+    last_active: HashMap<isize, u64>,
+    /// Order in which unpinned app groups first appeared.
+    group_order: Vec<String>,
+    names: HashMap<String, String>,
+    pids: HashMap<u32, Option<String>>,
+}
+
+static BOOK: Mutex<Option<Book>> = Mutex::new(None);
+
+fn with_book<R>(f: impl FnOnce(&mut Book) -> R) -> R {
+    f(BOOK.lock().unwrap().get_or_insert_with(Book::default))
+}
+
+/// The last foreground window that isn't one of ours.
+pub fn last_foreground() -> isize {
+    LAST_FG.load(Ordering::Relaxed)
+}
+
+fn note_foreground(h: HWND) {
+    if h.is_invalid() || win::window_pid(h) == std::process::id() {
+        return;
+    }
+    LAST_FG.store(hval(h), Ordering::Relaxed);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    with_book(|b| b.last_active.insert(hval(h), seq));
+}
+
+// ---------------------------------------------------------------- window events
+
+const EVENT_OBJECT_CLOAKED: u32 = 0x8017;
+const EVENT_OBJECT_UNCLOAKED: u32 = 0x8018;
+
+unsafe extern "system" fn win_event(
+    _hook: HWINEVENTHOOK,
+    event: u32,
+    h: HWND,
+    id_object: i32,
+    id_child: i32,
+    _thread: u32,
+    _time: u32,
+) {
+    if id_object != OBJID_WINDOW.0 || id_child != CHILDID_SELF as i32 {
+        return;
+    }
+    if event == EVENT_SYSTEM_FOREGROUND {
+        note_foreground(h);
+    }
+    DIRTY.store(true, Ordering::Relaxed);
+}
+
+/// Start the event hook thread and the refresh loop that emits `apps-changed`.
+pub fn start(app: AppHandle) {
+    note_foreground(unsafe { GetForegroundWindow() });
+
+    std::thread::spawn(|| unsafe {
+        let flags = WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS;
+        for (a, b) in [
+            (EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND),
+            (EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND),
+            (EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE),
+            (EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_NAMECHANGE),
+            (EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED),
+        ] {
+            SetWinEventHook(a, b, None, Some(win_event), 0, 0, flags);
+        }
+        let mut msg = MSG::default();
+        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+            let _ = TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    });
+
+    std::thread::spawn(move || {
+        icons::com_init();
+        let mut last = AppsSnapshot::default();
+        let mut last_full = Instant::now();
+        let mut pins = read_pins();
+        let mut pins_read = Instant::now();
+        loop {
+            std::thread::sleep(Duration::from_millis(120));
+            if pins_read.elapsed() > Duration::from_secs(10) {
+                pins = read_pins();
+                pins_read = Instant::now();
+                DIRTY.store(true, Ordering::Relaxed);
+            }
+            if !DIRTY.swap(false, Ordering::Relaxed) && last_full.elapsed() < Duration::from_secs(2) {
+                continue;
+            }
+            last_full = Instant::now();
+            let snap = build_snapshot(&pins);
+            if snap != last {
+                *CURRENT.lock().unwrap() = snap.clone();
+                let _ = app.emit("apps-changed", &snap);
+                last = snap;
+            }
+        }
+    });
+}
+
+static CURRENT: Mutex<AppsSnapshot> = Mutex::new(AppsSnapshot { apps: Vec::new(), active: 0 });
+
+pub fn current() -> AppsSnapshot {
+    let snap = CURRENT.lock().unwrap().clone();
+    if snap.apps.is_empty() {
+        icons::com_init();
+        build_snapshot(&read_pins())
+    } else {
+        snap
+    }
+}
+
+// ---------------------------------------------------------------- enumeration
+
+struct RawWin {
+    hwnd: isize,
+    title: String,
+    minimized: bool,
+    exe: String,
+    aumid: Option<String>,
+}
+
+fn is_cloaked(h: HWND) -> bool {
+    let mut v: u32 = 0;
+    unsafe {
+        DwmGetWindowAttribute(h, DWMWA_CLOAKED, &mut v as *mut _ as *mut _, 4).is_ok() && v != 0
+    }
+}
+
+/// Alt+Tab-style filter for "real" app windows.
+fn is_app_window(h: HWND) -> bool {
+    unsafe {
+        if !IsWindowVisible(h).as_bool() || is_cloaked(h) {
+            return false;
+        }
+        let ex = GetWindowLongPtrW(h, GWL_EXSTYLE) as u32;
+        let app_window = ex & WS_EX_APPWINDOW.0 != 0;
+        if ex & WS_EX_TOOLWINDOW.0 != 0 && !app_window {
+            return false;
+        }
+        if ex & WS_EX_NOACTIVATE.0 != 0 && !app_window {
+            return false;
+        }
+        let owner = GetWindow(h, GW_OWNER).unwrap_or_default();
+        if !owner.is_invalid() && !app_window {
+            return false;
+        }
+    }
+    !win::window_title(h).is_empty()
+}
+
+pub fn window_aumid(h: HWND) -> Option<String> {
+    unsafe {
+        let store: IPropertyStore = SHGetPropertyStoreForWindow(h).ok()?;
+        let v = store.GetValue(&PKEY_AppUserModel_ID).ok()?;
+        let s = v.to_string();
+        (!s.is_empty()).then_some(s)
+    }
+}
+
+unsafe extern "system" fn enum_cb(h: HWND, lparam: LPARAM) -> BOOL {
+    let out = &mut *(lparam.0 as *mut Vec<HWND>);
+    out.push(h);
+    true.into()
+}
+
+fn list_windows() -> Vec<RawWin> {
+    let mut all: Vec<HWND> = Vec::new();
+    unsafe {
+        let _ = EnumWindows(Some(enum_cb), LPARAM(&mut all as *mut _ as isize));
+    }
+    let own = std::process::id();
+    let mut out = Vec::new();
+    for h in all {
+        if !is_app_window(h) {
+            continue;
+        }
+        let pid = win::window_pid(h);
+        if pid == own {
+            continue;
+        }
+        let exe = with_book(|b| b.pids.get(&pid).cloned())
+            .unwrap_or_else(|| {
+                let p = win::process_path(pid);
+                with_book(|b| b.pids.insert(pid, p.clone()));
+                p
+            })
+            .unwrap_or_default();
+        out.push(RawWin {
+            hwnd: hval(h),
+            title: win::window_title(h),
+            minimized: unsafe { IsIconic(h).as_bool() },
+            exe,
+            aumid: window_aumid(h),
+        });
+    }
+    out
+}
+
+fn exe_description(path: &str) -> Option<String> {
+    let w = wide(path);
+    unsafe {
+        let size = GetFileVersionInfoSizeW(PCWSTR(w.as_ptr()), None);
+        if size == 0 {
+            return None;
+        }
+        let mut data = vec![0u8; size as usize];
+        GetFileVersionInfoW(PCWSTR(w.as_ptr()), None, size, data.as_mut_ptr() as *mut _).ok()?;
+        let mut ptr: *mut std::ffi::c_void = std::ptr::null_mut();
+        let mut len = 0u32;
+        let tq = wide("\\VarFileInfo\\Translation");
+        if !VerQueryValueW(data.as_ptr() as *const _, PCWSTR(tq.as_ptr()), &mut ptr, &mut len).as_bool()
+            || len < 4
+        {
+            return None;
+        }
+        let lang = *(ptr as *const u16);
+        let cp = *(ptr as *const u16).add(1);
+        let q = wide(&format!("\\StringFileInfo\\{lang:04x}{cp:04x}\\FileDescription"));
+        if !VerQueryValueW(data.as_ptr() as *const _, PCWSTR(q.as_ptr()), &mut ptr, &mut len).as_bool()
+            || len == 0
+        {
+            return None;
+        }
+        let s = std::slice::from_raw_parts(ptr as *const u16, len as usize);
+        let s = String::from_utf16_lossy(s).trim_end_matches('\0').trim().to_string();
+        (!s.is_empty()).then_some(s)
+    }
+}
+
+fn app_name(key: &str, aumid: Option<&str>, exe: &str) -> String {
+    if let Some(n) = with_book(|b| b.names.get(key).cloned()) {
+        return n;
+    }
+    let name = aumid
+        .and_then(|a| icons::display_name(&format!("shell:AppsFolder\\{a}")))
+        .or_else(|| exe_description(exe))
+        .unwrap_or_else(|| {
+            std::path::Path::new(exe)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "App".into())
+        });
+    with_book(|b| b.names.insert(key.to_string(), name.clone()));
+    name
+}
+
+fn icon_key(aumid: Option<&str>, exe: &str) -> String {
+    match aumid {
+        Some(a) if !exe.is_empty() => format!("aumid:{a}|path:{exe}"),
+        Some(a) => format!("aumid:{a}"),
+        None => format!("path:{exe}"),
+    }
+}
+
+// ---------------------------------------------------------------- pins
+
+#[derive(Clone, Debug)]
+pub struct Pin {
+    lnk: String,
+    name: String,
+    target: Option<String>,
+    aumid: Option<String>,
+}
+
+fn pins_dir() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(|a| {
+        PathBuf::from(a).join("Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar")
+    })
+}
+
+/// Read the user's Windows taskbar pins (the .lnk files Explorer keeps for them).
+pub fn read_pins() -> Vec<Pin> {
+    let Some(dir) = pins_dir() else { return vec![] };
+    let Ok(rd) = std::fs::read_dir(&dir) else { return vec![] };
+    let mut files: Vec<PathBuf> = rd
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().map(|e| e.eq_ignore_ascii_case("lnk")).unwrap_or(false))
+        .collect();
+    files.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.created()).ok());
+    files
+        .into_iter()
+        .map(|p| {
+            let lnk = p.to_string_lossy().to_string();
+            let (target, aumid) = resolve_link(&lnk);
+            Pin {
+                name: p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
+                lnk,
+                target,
+                aumid,
+            }
+        })
+        .collect()
+}
+
+fn resolve_link(lnk: &str) -> (Option<String>, Option<String>) {
+    unsafe {
+        let Ok(link) = CoCreateInstance::<_, IShellLinkW>(&ShellLink, None, CLSCTX_INPROC_SERVER) else {
+            return (None, None);
+        };
+        let w = wide(lnk);
+        let Ok(pf) = link.cast::<IPersistFile>() else { return (None, None) };
+        if pf.Load(PCWSTR(w.as_ptr()), STGM_READ).is_err() {
+            return (None, None);
+        }
+        let mut buf = [0u16; 1024];
+        let mut fd = WIN32_FIND_DATAW::default();
+        let target = link
+            .GetPath(&mut buf, &mut fd, 0)
+            .ok()
+            .map(|_| String::from_utf16_lossy(&buf[..buf.iter().position(|&c| c == 0).unwrap_or(0)]))
+            .filter(|s| !s.is_empty());
+        let aumid = link
+            .cast::<IPropertyStore>()
+            .ok()
+            .and_then(|s| s.GetValue(&PKEY_AppUserModel_ID).ok())
+            .map(|v| v.to_string())
+            .filter(|s| !s.is_empty());
+        (target, aumid)
+    }
+}
+
+// ---------------------------------------------------------------- snapshot
+
+fn build_snapshot(pins: &[Pin]) -> AppsSnapshot {
+    let raws = list_windows();
+
+    // Group windows by AppUserModelID, else by executable path.
+    let mut groups: Vec<(String, Option<String>, String, Vec<WinInfo>)> = Vec::new();
+    with_book(|b| {
+        let live: std::collections::HashSet<isize> = raws.iter().map(|r| r.hwnd).collect();
+        b.first_seen.retain(|h, _| live.contains(h));
+        b.last_active.retain(|h, _| live.contains(h));
+        for r in &raws {
+            b.first_seen
+                .entry(r.hwnd)
+                .or_insert_with(|| SEQ.fetch_add(1, Ordering::Relaxed));
+        }
+    });
+    let mut raws = raws;
+    with_book(|b| raws.sort_by_key(|r| b.first_seen.get(&r.hwnd).copied().unwrap_or(0)));
+    for r in raws {
+        let key = r.aumid.clone().unwrap_or_else(|| r.exe.to_lowercase());
+        let info = WinInfo { hwnd: r.hwnd, title: r.title, minimized: r.minimized };
+        match groups.iter_mut().find(|g| g.0 == key) {
+            Some(g) => g.3.push(info),
+            None => groups.push((key, r.aumid, r.exe, vec![info])),
+        }
+    }
+
+    let mut apps = Vec::new();
+    for pin in pins {
+        let tgt = pin.target.as_ref().map(|t| t.to_lowercase());
+        let mut windows = Vec::new();
+        groups.retain(|(key, aumid, exe, wins)| {
+            let hit = (pin.aumid.is_some() && pin.aumid == *aumid)
+                || (aumid.is_none() && tgt.as_deref() == Some(exe.to_lowercase().as_str()))
+                || (pin.aumid.is_some() && pin.aumid.as_deref() == Some(key.as_str()));
+            if hit {
+                windows.extend(wins.iter().cloned());
+            }
+            !hit
+        });
+        apps.push(DockApp {
+            key: format!("pin:{}", pin.lnk),
+            name: pin.name.clone(),
+            icon: format!("path:{}", pin.lnk),
+            pinned: true,
+            launch: Some(pin.lnk.clone()),
+            windows,
+        });
+    }
+
+    with_book(|b| {
+        for g in &groups {
+            if !b.group_order.contains(&g.0) {
+                b.group_order.push(g.0.clone());
+            }
+        }
+        let order = b.group_order.clone();
+        groups.sort_by_key(|g| order.iter().position(|k| *k == g.0).unwrap_or(usize::MAX));
+    });
+    for (key, aumid, exe, windows) in groups {
+        let launch = match &aumid {
+            Some(a) => Some(format!("shell:AppsFolder\\{a}")),
+            None if !exe.is_empty() => Some(exe.clone()),
+            None => None,
+        };
+        apps.push(DockApp {
+            name: app_name(&key, aumid.as_deref(), &exe),
+            icon: icon_key(aumid.as_deref(), &exe),
+            key,
+            pinned: false,
+            launch,
+            windows,
+        });
+    }
+    AppsSnapshot { apps, active: last_foreground() }
+}
+
+// ---------------------------------------------------------------- actions
+
+pub fn activate(h: HWND) {
+    unsafe {
+        if IsIconic(h).as_bool() {
+            let _ = ShowWindow(h, SW_RESTORE);
+        }
+        if !SetForegroundWindow(h).as_bool() {
+            // Fall back: a no-op Alt press unlocks SetForegroundWindow for this process.
+            let alt = |up: bool| INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: windows::Win32::UI::Input::KeyboardAndMouse::VK_MENU,
+                        dwFlags: if up { KEYEVENTF_KEYUP } else { Default::default() },
+                        ..Default::default()
+                    },
+                },
+            };
+            SendInput(&[alt(false), alt(true)], std::mem::size_of::<INPUT>() as i32);
+            let _ = SetForegroundWindow(h);
+        }
+    }
+    note_foreground(h);
+    DIRTY.store(true, Ordering::Relaxed);
+}
+
+/// Taskbar-style click on an app: restore/focus, minimize if already active,
+/// or cycle when the app has several windows.
+pub fn click_app(hwnds: &[isize]) {
+    if hwnds.is_empty() {
+        return;
+    }
+    let fg = last_foreground();
+    let alive: Vec<isize> = hwnds
+        .iter()
+        .copied()
+        .filter(|&h| unsafe { IsWindow(Some(hwnd(h))).as_bool() })
+        .collect();
+    if alive.is_empty() {
+        return;
+    }
+    if alive.len() == 1 {
+        let h = hwnd(alive[0]);
+        if alive[0] == fg && unsafe { !IsIconic(h).as_bool() } {
+            unsafe {
+                let _ = ShowWindow(h, SW_MINIMIZE);
+            }
+            DIRTY.store(true, Ordering::Relaxed);
+        } else {
+            activate(h);
+        }
+        return;
+    }
+    let target = if let Some(i) = alive.iter().position(|&h| h == fg) {
+        alive[(i + 1) % alive.len()]
+    } else {
+        with_book(|b| {
+            *alive
+                .iter()
+                .max_by_key(|h| b.last_active.get(h).copied().unwrap_or(0))
+                .unwrap()
+        })
+    };
+    activate(hwnd(target));
+}
+
+pub fn close_window(h: isize) {
+    unsafe {
+        let _ = PostMessageW(Some(hwnd(h)), WM_CLOSE, WPARAM(0), LPARAM(0));
+    }
+}
+
+pub fn launch(target: &str) {
+    let op = wide("open");
+    let t = wide(target);
+    unsafe {
+        ShellExecuteW(None, PCWSTR(op.as_ptr()), PCWSTR(t.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
+    }
+}
+
+/// Open the Start menu by pressing the Windows key.
+pub fn open_start() {
+    let key = |up: bool| INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: VK_LWIN,
+                dwFlags: if up { KEYEVENTF_KEYUP } else { Default::default() },
+                ..Default::default()
+            },
+        },
+    };
+    unsafe {
+        SendInput(&[key(false), key(true)], std::mem::size_of::<INPUT>() as i32);
+    }
+}
