@@ -82,7 +82,7 @@ pub fn show_osd(app: &AppHandle, kind: &str, on: bool) {
 }
 
 /// Top-left of a `w`x`h` (physical px) content box centred on screen-x `center`, next to the dock.
-fn content_position(app: &AppHandle, center: i32, w: i32, h: i32) -> (i32, i32) {
+pub fn content_position(app: &AppHandle, center: i32, w: i32, h: i32) -> (i32, i32) {
     let st = app.state::<AppState>();
     let d = *st.dock.lock().unwrap();
     let mon = win::monitor_rect(win::primary_monitor());
@@ -107,7 +107,7 @@ fn place_popup(app: &AppHandle, win: &tauri::WebviewWindow, center: i32, width: 
 }
 
 /// Screen-x (physical) of the centre of a dock span given in the dock's CSS px.
-fn anchor_center(app: &AppHandle, anchor_x: f64, anchor_w: f64) -> i32 {
+pub fn anchor_center(app: &AppHandle, anchor_x: f64, anchor_w: f64) -> i32 {
     let d = *app.state::<AppState>().dock.lock().unwrap();
     d.x + ((anchor_x + anchor_w / 2.0) * d.scale).round() as i32
 }

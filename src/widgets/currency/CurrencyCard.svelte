@@ -29,13 +29,6 @@
     updateSettings({ currencyBase: quote, currencyQuote: base });
   }
 
-  const isFav = $derived(favorites.includes(quote));
-  function toggleFav() {
-    updateSettings({
-      currencyFavorites: isFav ? favorites.filter((c) => c !== quote) : [...favorites, quote].slice(0, 8),
-    });
-  }
-
   // The currency picker slides over the card.
   let picking = $state<"base" | "quote" | null>(null);
   let query = $state("");
@@ -113,9 +106,6 @@
       </div>
       <div class="rate muted-text">
         <span>1 {base} = {r != null ? money(r) : "–"} {quote} · {currencyName(quote)}</span>
-        <button class="icon-btn star" class:on={isFav} onclick={toggleFav} title={isFav ? "Remove from favourites" : "Add to favourites"}>
-          <Icon name={isFav ? "starFill" : "star"} size={14} />
-        </button>
       </div>
     </div>
 
@@ -269,13 +259,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  .star {
-    width: 26px;
-    height: 26px;
-  }
-  .star.on {
-    color: #e8b33d;
   }
   .favs {
     display: flex;

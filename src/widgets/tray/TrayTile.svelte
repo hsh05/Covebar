@@ -23,7 +23,11 @@
   });
   const src = (i: TrayIcon) => i.image ?? (i.iconKey ? fallback[i.iconKey] : null);
 
-  const click = (id: string, button: "left" | "right" | "overflow") => invoke("tray_click", { id, button });
+  let root: HTMLDivElement;
+  function click(id: string, button: "left" | "right" | "overflow") {
+    const r = root.getBoundingClientRect();
+    invoke("tray_click", { id, button, anchorX: r.left, anchorWidth: r.width });
+  }
   function right(e: MouseEvent, id: string) {
     e.preventDefault();
     e.stopPropagation();
@@ -31,7 +35,7 @@
   }
 </script>
 
-<div class="tray" data-nodrag>
+<div class="tray" data-nodrag bind:this={root}>
   {#if st.hasOverflow}
     <button class="tile glyph chevron" onclick={() => click("", "overflow")} title="Show hidden icons">
       <Icon name="chevronUp" size={16} />

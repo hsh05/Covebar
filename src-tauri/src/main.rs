@@ -305,8 +305,9 @@ fn get_tray() -> tray::TrayState {
 }
 
 #[tauri::command]
-fn tray_click(id: String, button: String) {
-    tray::click(id, button);
+fn tray_click(app: AppHandle, id: String, button: String, anchor_x: Option<f64>, anchor_width: Option<f64>) {
+    let center = anchor_x.map(|x| popups::anchor_center(&app, x, anchor_width.unwrap_or(0.0)));
+    tray::click(id, button, center);
 }
 
 #[tauri::command]

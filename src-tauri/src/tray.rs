@@ -182,8 +182,8 @@ fn refresh() {
 }
 
 /// Forward a click to a tray icon: `button` is "left" or "right"; "overflow" opens the
-/// Windows hidden-icons flyout.
-pub fn click(id: String, button: String) {
+/// Windows hidden-icons flyout, moved next to the bar at screen-x `center` when given.
+pub fn click(id: String, button: String, center: Option<i32>) {
     let Some(w) = WORKER.get() else { return };
     w.run(move || {
         let Ok(Some(list)) = buttons() else { return };
@@ -199,8 +199,53 @@ pub fn click(id: String, button: String) {
         if let Err(e) = r {
             crate::dlog!("tray click ({button}): {e}");
         }
+        if button == "overflow" {
+            if let Some(c) = center {
+                move_flyout(c);
+            }
+        }
         refresh();
     });
+}
+
+/// Windows places the hidden-icons flyout over its own (hidden) taskbar; move it next to ours.
+fn move_flyout(center: i32) {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        FindWindowW, GetWindowRect, IsWindowVisible, SetWindowPos, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
+    };
+    let Some(app) = APP.get() else { return };
+    let classes = ["TopLevelWindowForOverflowXamlIsland", "NotifyIconOverflowWindow"];
+    let mut placed = 0;
+    // It appears a moment after the click, and Explorer may place it once more as it opens.
+    for _ in 0..40 {
+        for cls in classes {
+            let c = crate::win::wide(cls);
+            let Ok(h) = (unsafe { FindWindowW(PCWSTR(c.as_ptr()), PCWSTR::null()) }) else { continue };
+            if h.is_invalid() || !unsafe { IsWindowVisible(h) }.as_bool() {
+                continue;
+            }
+            let mut r = RECT::default();
+            if unsafe { GetWindowRect(h, &mut r) }.is_err() {
+                continue;
+            }
+            let (w, ht) = (r.right - r.left, r.bottom - r.top);
+            if w <= 0 || ht <= 0 {
+                continue;
+            }
+            let (x, y) = crate::popups::content_position(app, center, w, ht);
+            if (r.left, r.top) != (x, y) {
+                unsafe {
+                    let _ = SetWindowPos(h, None, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+            }
+            placed += 1;
+        }
+        if placed >= 8 {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
 }
 
 // ---------------------------------------------------------------- icon snapshots

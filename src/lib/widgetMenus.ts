@@ -163,7 +163,14 @@ export async function widgetMenu(id: string, openCard: () => void): Promise<Menu
       ];
     case "tray":
       return [
-        { label: "Show hidden icons", icon: "open", action: () => invoke("tray_click", { id: "", button: "overflow" }) },
+        {
+          label: "Show hidden icons",
+          icon: "open",
+          action: () => {
+            const r = document.querySelector('[data-id="tray"]')?.getBoundingClientRect();
+            invoke("tray_click", { id: "", button: "overflow", anchorX: r?.left ?? null, anchorWidth: r?.width ?? null });
+          },
+        },
         { label: "Taskbar settings", icon: "settings", action: settingsPage("taskbar") },
       ];
     case "clock":
