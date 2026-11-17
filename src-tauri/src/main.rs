@@ -11,13 +11,20 @@ macro_rules! dlog {
 }
 
 mod apps;
+mod audio;
+mod media;
+mod worker;
 mod appbar;
+mod brightness;
 mod dock;
+mod hotkeys;
 mod icons;
 mod popups;
+mod recycle;
 mod settings;
 mod state;
 mod taskbar;
+mod timers;
 mod watchdog;
 mod win;
 
@@ -54,6 +61,9 @@ fn set_settings(app: AppHandle, state: State<AppState>, mut settings: Settings) 
     if old.hide_taskbar != settings.hide_taskbar {
         dock::set_taskbar_hidden(&app, settings.hide_taskbar);
         dock::place(&app);
+    }
+    if old.hotkeys != settings.hotkeys {
+        hotkeys::update(settings.hotkeys.clone());
     }
     if old.autostart != settings.autostart {
         let al = app.autolaunch();
@@ -148,6 +158,83 @@ fn hide_preview(app: AppHandle) {
     popups::hide_preview(&app);
 }
 
+// ---------------------------------------------------------------- phase 2 widgets
+
+#[tauri::command]
+fn get_media() -> Option<media::MediaInfo> {
+    media::current()
+}
+
+#[tauri::command]
+fn media_command(action: String) {
+    media::command(action);
+}
+
+#[tauri::command]
+fn get_audio() -> audio::AudioState {
+    audio::current()
+}
+
+#[tauri::command]
+fn set_volume(which: String, volume: f32) {
+    audio::set_volume(which, volume);
+}
+
+#[tauri::command]
+fn set_mute(which: String, muted: bool) {
+    audio::set_mute(which, muted);
+}
+
+#[tauri::command]
+fn set_default_output(id: String) {
+    audio::set_default_output(id);
+}
+
+#[tauri::command]
+fn get_brightness() -> Vec<brightness::Display> {
+    brightness::current()
+}
+
+#[tauri::command]
+fn set_brightness(id: String, value: u32) {
+    brightness::set(id, value);
+}
+
+#[tauri::command]
+fn get_recycle() -> recycle::BinInfo {
+    recycle::current()
+}
+
+#[tauri::command]
+async fn empty_recycle() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(recycle::empty).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn open_recycle() {
+    recycle::open();
+}
+
+#[tauri::command]
+fn get_timers() -> timers::TimersState {
+    timers::get()
+}
+
+#[tauri::command]
+fn timers_action(action: String, value: Option<u64>) -> timers::TimersState {
+    timers::action(&action, value)
+}
+
+#[tauri::command]
+fn pause_hotkeys(paused: bool) {
+    hotkeys::set_paused(paused);
+}
+
+#[tauri::command]
+fn get_hotkey_status() -> hotkeys::HotkeyStatus {
+    hotkeys::status()
+}
+
 #[tauri::command]
 async fn open_settings(app: AppHandle) -> Result<(), String> {
     show_settings(&app).map_err(|e| e.to_string())
@@ -182,7 +269,8 @@ fn show_settings(app: &AppHandle) -> tauri::Result<()> {
 
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.handle().clone();
-    let settings_path = app.path().app_config_dir()?.join("settings.json");
+    let config_dir = app.path().app_config_dir()?;
+    let settings_path = config_dir.join("settings.json");
     let settings = settings::load(&settings_path);
     let marker_path = taskbar::default_marker_path();
 
@@ -224,11 +312,18 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     apps::start(handle.clone());
+    media::start(handle.clone());
+    audio::start(handle.clone());
+    brightness::start(handle.clone());
+    recycle::start(handle.clone());
+    timers::start(handle.clone(), config_dir.join("timers.json"));
+    hotkeys::start(handle.clone(), settings.hotkeys.clone());
     dock::start_watcher(handle);
     Ok(())
 }
 
 fn cleanup(app: &AppHandle) {
+    timers::shutdown();
     if let Some(h) = app.get_webview_window("dock").and_then(|d| win::tauri_hwnd(&d)) {
         appbar::remove(h);
     }
@@ -264,6 +359,7 @@ fn main() {
             let _ = show_settings(app);
         }))
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_notification::init())
         .setup(setup)
         .invoke_handler(tauri::generate_handler![
             get_settings,
@@ -284,6 +380,21 @@ fn main() {
             preview_hold,
             preview_release,
             hide_preview,
+            get_media,
+            media_command,
+            get_audio,
+            set_volume,
+            set_mute,
+            set_default_output,
+            get_brightness,
+            set_brightness,
+            get_recycle,
+            empty_recycle,
+            open_recycle,
+            get_timers,
+            timers_action,
+            get_hotkey_status,
+            pause_hotkeys,
             open_settings,
             quit,
         ])

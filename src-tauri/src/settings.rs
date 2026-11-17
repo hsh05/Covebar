@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// Widgets that exist in this build, in their default order.
-pub const KNOWN_WIDGETS: &[&str] = &["apps", "clock"];
+pub const KNOWN_WIDGETS: &[&str] =
+    &["apps", "media", "timer", "stopwatch", "recycle", "brightness", "mic", "volume", "clock"];
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -55,6 +56,23 @@ pub struct Settings {
     pub widgets: Vec<WidgetEntry>,
     pub autostart: bool,
     pub hide_taskbar: bool,
+    pub hotkeys: Hotkeys,
+    /// Timer presets in seconds.
+    pub timer_presets: Vec<u32>,
+}
+
+/// Global shortcuts, as strings like "Win+Alt+M". Empty disables one.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Hotkeys {
+    pub mic_mute: String,
+    pub speaker_mute: String,
+}
+
+impl Default for Hotkeys {
+    fn default() -> Self {
+        Self { mic_mute: "Win+Alt+M".into(), speaker_mute: "Win+Alt+S".into() }
+    }
 }
 
 impl Default for Settings {
@@ -73,6 +91,8 @@ impl Default for Settings {
                 .collect(),
             autostart: false,
             hide_taskbar: true,
+            hotkeys: Hotkeys::default(),
+            timer_presets: vec![60, 300, 600, 1500, 3600],
         }
     }
 }
@@ -83,11 +103,22 @@ impl Settings {
         let mut seen = std::collections::HashSet::new();
         self.widgets
             .retain(|w| KNOWN_WIDGETS.contains(&w.id.as_str()) && seen.insert(w.id.clone()));
-        for id in KNOWN_WIDGETS {
-            if !self.widgets.iter().any(|w| w.id == *id) {
-                self.widgets.push(WidgetEntry { id: id.to_string(), enabled: true });
+        // New widgets go after their nearest known predecessor in the default order.
+        for (i, id) in KNOWN_WIDGETS.iter().enumerate() {
+            if self.widgets.iter().any(|w| w.id == *id) {
+                continue;
             }
+            let at = KNOWN_WIDGETS[..i]
+                .iter()
+                .rev()
+                .find_map(|prev| self.widgets.iter().position(|w| w.id == *prev))
+                .map(|p| p + 1)
+                .unwrap_or(0);
+            self.widgets.insert(at, WidgetEntry { id: id.to_string(), enabled: true });
         }
+        self.timer_presets.retain(|s| (1..=86_400).contains(s));
+        self.timer_presets.dedup();
+        self.timer_presets.truncate(8);
     }
 
     /// Bar thickness in device-independent pixels.

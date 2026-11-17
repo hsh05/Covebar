@@ -1,0 +1,164 @@
+//! Now Playing: the system media session (SMTC) that Spotify, browsers and players publish.
+
+use crate::worker::{com_mta, Worker};
+use base64::Engine;
+use serde::Serialize;
+use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
+use tauri::{AppHandle, Emitter};
+use windows::Media::Control::{
+    GlobalSystemMediaTransportControlsSession as Session,
+    GlobalSystemMediaTransportControlsSessionManager as Manager,
+    GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
+};
+use windows::Storage::Streams::DataReader;
+
+#[derive(Serialize, Clone, PartialEq, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaInfo {
+    /// AppUserModelID of the app playing, and a friendly name and icon key for it.
+    pub source: String,
+    pub source_name: String,
+    pub source_icon: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub playing: bool,
+    pub can_prev: bool,
+    pub can_next: bool,
+    pub can_play_pause: bool,
+    /// Seconds into the track at `updated_at` (unix ms), and the track length; 0 if unknown.
+    pub position: f64,
+    pub duration: f64,
+    pub updated_at: f64,
+    /// Cover art as a data URL.
+    pub art: Option<String>,
+}
+
+static WORKER: OnceLock<Worker> = OnceLock::new();
+static CURRENT: Mutex<Option<MediaInfo>> = Mutex::new(None);
+
+struct Ctx {
+    manager: Option<Manager>,
+    art_key: String,
+    art: Option<String>,
+}
+
+thread_local! {
+    static CTX: std::cell::RefCell<Ctx> = const { std::cell::RefCell::new(Ctx { manager: None, art_key: String::new(), art: None }) };
+}
+
+pub fn start(app: AppHandle) {
+    WORKER.get_or_init(|| {
+        Worker::spawn(com_mta, Duration::from_millis(800), move || {
+            let info = read().ok().flatten();
+            let mut cur = CURRENT.lock().unwrap();
+            if *cur != info {
+                *cur = info.clone();
+                let _ = app.emit("media-changed", info);
+            }
+        })
+    });
+}
+
+pub fn current() -> Option<MediaInfo> {
+    CURRENT.lock().unwrap().clone()
+}
+
+fn session() -> windows::core::Result<Option<Session>> {
+    CTX.with(|c| {
+        let mut c = c.borrow_mut();
+        if c.manager.is_none() {
+            c.manager = Some(Manager::RequestAsync()?.get()?);
+        }
+        Ok(c.manager.as_ref().unwrap().GetCurrentSession().ok())
+    })
+}
+
+fn source_name(aumid: &str) -> String {
+    crate::icons::display_name(&format!("shell:AppsFolder\\{aumid}")).unwrap_or_else(|| {
+        let s = aumid.rsplit(['\\', '!']).next().unwrap_or(aumid);
+        s.trim_end_matches(".exe").to_string()
+    })
+}
+
+fn read() -> windows::core::Result<Option<MediaInfo>> {
+    let Some(s) = session()? else { return Ok(None) };
+    let props = s.TryGetMediaPropertiesAsync()?.get()?;
+    let info = s.GetPlaybackInfo()?;
+    let controls = info.Controls()?;
+    let timeline = s.GetTimelineProperties()?;
+    let source = s.SourceAppUserModelId()?.to_string();
+
+    let ticks = |t: windows::Foundation::TimeSpan| t.Duration as f64 / 10_000_000.0;
+    let start = ticks(timeline.StartTime()?);
+    let end = ticks(timeline.EndTime()?);
+    let position = (ticks(timeline.Position()?) - start).max(0.0);
+    let updated = timeline.LastUpdatedTime()?.UniversalTime;
+    // 100 ns ticks since 1601 -> unix ms.
+    let updated_at = (updated - 116_444_736_000_000_000) as f64 / 10_000.0;
+
+    let title = props.Title()?.to_string();
+    let artist = props.Artist()?.to_string();
+    let album = props.AlbumTitle()?.to_string();
+
+    // Cover art only changes with the track; fetch it once per track.
+    let key = format!("{source}|{title}|{artist}|{album}");
+    let art = CTX.with(|c| {
+        let mut c = c.borrow_mut();
+        if c.art_key != key {
+            c.art_key = key;
+            c.art = props.Thumbnail().ok().and_then(|t| read_art(&t).ok());
+        }
+        c.art.clone()
+    });
+
+    if title.is_empty() && artist.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(MediaInfo {
+        source_name: source_name(&source),
+        source_icon: format!("aumid:{source}"),
+        source,
+        title,
+        artist,
+        album,
+        playing: info.PlaybackStatus()? == Status::Playing,
+        can_prev: controls.IsPreviousEnabled()?,
+        can_next: controls.IsNextEnabled()?,
+        can_play_pause: controls.IsPlayPauseToggleEnabled()? || controls.IsPlayEnabled()?,
+        position,
+        duration: (end - start).max(0.0),
+        updated_at,
+        art,
+    }))
+}
+
+fn read_art(r: &windows::Storage::Streams::IRandomAccessStreamReference) -> windows::core::Result<String> {
+    let stream = r.OpenReadAsync()?.get()?;
+    let size = stream.Size()? as u32;
+    let ct = stream.ContentType().map(|c| c.to_string()).unwrap_or_default();
+    let reader = DataReader::CreateDataReader(&stream)?;
+    reader.LoadAsync(size)?.get()?;
+    let mut buf = vec![0u8; size as usize];
+    reader.ReadBytes(&mut buf)?;
+    let ct = if ct.starts_with("image/") { ct } else { "image/png".into() };
+    Ok(format!("data:{ct};base64,{}", base64::engine::general_purpose::STANDARD.encode(buf)))
+}
+
+/// Play/pause, next or previous on the current session.
+pub fn command(action: String) {
+    let Some(w) = WORKER.get() else { return };
+    w.run(move || {
+        let Ok(Some(s)) = session() else { return };
+        let r = match action.as_str() {
+            "playPause" => s.TryTogglePlayPauseAsync().and_then(|op| op.get()),
+            "next" => s.TrySkipNextAsync().and_then(|op| op.get()),
+            "prev" => s.TrySkipPreviousAsync().and_then(|op| op.get()),
+            _ => return,
+        };
+        if let Err(e) = r {
+            crate::dlog!("media {action}: {e}");
+        }
+    });
+}
