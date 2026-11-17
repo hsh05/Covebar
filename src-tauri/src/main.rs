@@ -43,7 +43,8 @@ fn set_settings(app: AppHandle, state: State<AppState>, mut settings: Settings) 
     *state.settings.lock().unwrap() = settings.clone();
 
     if old.edge != settings.edge || old.size != settings.size {
-        popups::close_card(&app);
+        popups::close_card(&app, None);
+        popups::close_menu(&app);
         popups::hide_preview(&app);
         dock::place(&app);
     }
@@ -108,8 +109,18 @@ fn open_card(app: AppHandle, widget: String, anchor_x: f64, anchor_width: f64, w
 }
 
 #[tauri::command]
-fn close_card(app: AppHandle) {
-    popups::close_card(&app);
+fn close_card(app: AppHandle, widget: Option<String>) {
+    popups::close_card(&app, widget.as_deref());
+}
+
+#[tauri::command]
+fn open_menu(app: AppHandle, items: serde_json::Value, width: f64, height: f64) -> u64 {
+    popups::open_menu(&app, items, width, height)
+}
+
+#[tauri::command]
+fn close_menu(app: AppHandle, session: Option<u64>) {
+    popups::close_menu_session(&app, session);
 }
 
 #[tauri::command]
@@ -266,6 +277,8 @@ fn main() {
             open_start,
             open_card,
             close_card,
+            open_menu,
+            close_menu,
             show_preview,
             set_thumbnails,
             preview_hold,

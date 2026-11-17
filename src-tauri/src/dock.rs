@@ -11,7 +11,7 @@ use windows::Win32::Foundation::RECT;
 use windows::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTONULL};
 use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowRect};
 
-const WINDOWS: [&str; 4] = ["dock", "card", "preview", "settings"];
+const WINDOWS: [&str; 5] = ["dock", "card", "preview", "menu", "settings"];
 
 /// Reserve space with the AppBar and move the dock into it.
 pub fn place(app: &AppHandle) {
@@ -43,9 +43,11 @@ pub fn apply_look(app: &AppHandle, s: &Settings) {
     for label in WINDOWS {
         let Some(w) = app.get_webview_window(label) else { continue };
         let _ = w.set_theme(theme);
-        // Mica only exists on Windows 11; popups always use Acrylic for a stronger blur.
+        // Popups draw their own surface (so they can animate); only the bar and the
+        // settings window get a system backdrop. Mica only exists on Windows 11.
         let effect = match (label, s.material) {
-            ("dock" | "settings", Material::Mica) if win11 => Effect::Mica,
+            ("card" | "preview" | "menu", _) => continue,
+            ("dock", Material::Mica) if win11 => Effect::Mica,
             ("settings", _) if win11 => Effect::Mica,
             _ => Effect::Acrylic,
         };
@@ -151,7 +153,8 @@ pub fn start_watcher(app: AppHandle) {
             if fs != st.fullscreen.swap(fs, Ordering::SeqCst) {
                 let Some(dock) = app.get_webview_window("dock") else { continue };
                 if fs {
-                    popups::close_card(&app);
+                    popups::close_card(&app, None);
+                    popups::close_menu(&app);
                     popups::hide_preview(&app);
                     if let Some(h) = win::tauri_hwnd(&dock) {
                         win::hide(h);

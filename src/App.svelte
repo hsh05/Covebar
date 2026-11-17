@@ -4,6 +4,7 @@
   import Dock from "./views/Dock.svelte";
   import Card from "./views/Card.svelte";
   import Preview from "./views/Preview.svelte";
+  import Menu from "./views/Menu.svelte";
   import Settings from "./views/Settings.svelte";
 
   const label = getCurrentWebviewWindow().label;
@@ -30,6 +31,8 @@
     <Card />
   {:else if label === "preview"}
     <Preview />
+  {:else if label === "menu"}
+    <Menu />
   {:else if label === "settings"}
     <Settings />
   {/if}

@@ -4,17 +4,29 @@
   import { tick } from "svelte";
   import { iconUrl } from "../lib/icons";
   import { PREVIEW } from "../lib/popups";
+  import { ENTER_MS } from "../lib/motion";
   import type { PreviewData } from "../lib/types";
 
   let data = $state<PreviewData | null>(null);
   let icon = $state<string | null>(null);
-  let root: HTMLElement;
+  let root = $state<HTMLElement>();
+  let shown = $state(0);
+  let out = $state(false);
+  let thumbTimer: ReturnType<typeof setTimeout> | undefined;
 
   listen<PreviewData>("preview-data", async (e) => {
     data = e.payload;
+    out = false;
+    shown++;
     iconUrl(e.payload.icon, 16).then((u) => (icon = u));
+    // Live thumbnails can't animate, so attach them once the panel has settled.
+    clearTimeout(thumbTimer);
     await tick();
-    registerThumbs();
+    thumbTimer = setTimeout(registerThumbs, ENTER_MS + 10);
+  });
+  listen("preview-out", () => {
+    clearTimeout(thumbTimer);
+    out = true;
   });
 
   // Tell the backend where each live thumbnail goes (physical pixels in this window).
@@ -42,8 +54,10 @@
   }
 </script>
 
+{#key shown}
 <div
-  class="preview"
+  class="surface preview"
+  class:out
   bind:this={root}
   style:--tw="{PREVIEW.thumbW}px"
   style:--th="{PREVIEW.thumbH}px"
@@ -78,17 +92,16 @@
     {/each}
   {/if}
 </div>
+{/key}
 
 <style>
   .preview {
-    height: 100vh;
     padding: var(--pad);
     display: grid;
     grid-template-columns: repeat(var(--cols), var(--tw));
     grid-auto-rows: calc(var(--hd) + var(--th));
     gap: var(--gap);
     align-content: start;
-    background: var(--card-tint);
   }
   .item {
     display: flex;
@@ -96,6 +109,9 @@
     border-radius: 8px;
     text-align: left;
     overflow: hidden;
+  }
+  .item {
+    transition: background-color var(--t-fast) var(--ease-out);
   }
   .item:hover {
     background: var(--hover);

@@ -15,7 +15,8 @@ export function previewSize(count: number) {
   const rows = Math.ceil(n / PREVIEW.perRow);
   const p = PREVIEW;
   return {
-    width: p.pad * 2 + cols * p.thumbW + (cols - 1) * p.gap,
-    height: p.pad * 2 + rows * (p.header + p.thumbH) + (rows - 1) * p.gap,
+    // +2 for the panel border.
+    width: 2 + p.pad * 2 + cols * p.thumbW + (cols - 1) * p.gap,
+    height: 2 + p.pad * 2 + rows * (p.header + p.thumbH) + (rows - 1) * p.gap,
   };
 }

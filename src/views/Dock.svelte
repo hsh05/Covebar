@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { getName } from "@tauri-apps/api/app";
-  import { Menu } from "@tauri-apps/api/menu";
+  import { showMenu } from "../lib/menu";
   import { store, updateSettings } from "../lib/settings.svelte";
   import { WIDGETS } from "../lib/widgets";
   import type { Edge } from "../lib/types";
@@ -36,15 +36,13 @@
   async function menu(e: MouseEvent) {
     e.preventDefault();
     const other: Edge = edge === "bottom" ? "top" : "bottom";
-    const m = await Menu.new({
-      items: [
-        { text: `${appName} settings…`, action: () => invoke("open_settings") },
-        { text: `Move bar to the ${other}`, action: () => updateSettings({ edge: other }) },
-        { item: "Separator" },
-        { text: `Quit ${appName}`, action: () => invoke("quit") },
-      ],
-    });
-    await m.popup();
+    await showMenu([
+      { label: "Task Manager", icon: "activity", action: () => invoke("launch_app", { target: "taskmgr.exe" }) },
+      { label: `${appName} settings`, icon: "settings", action: () => invoke("open_settings") },
+      { label: `Move bar to the ${other}`, icon: "swap", action: () => updateSettings({ edge: other }) },
+      { separator: true },
+      { label: `Quit ${appName}`, icon: "power", danger: true, action: () => invoke("quit") },
+    ]);
   }
 </script>
 

@@ -1,8 +1,12 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
-  import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
   import { onDestroy } from "svelte";
+  import { flip } from "svelte/animate";
+  import { scale } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
+  import { iconUrl } from "../../lib/icons";
+  import { showMenu, type MenuEntry } from "../../lib/menu";
   import { store } from "../../lib/settings.svelte";
   import { previewSize } from "../../lib/popups";
   import type { AppsSnapshot, DockApp, PreviewData } from "../../lib/types";
@@ -84,28 +88,28 @@
     e.preventDefault();
     e.stopPropagation();
     hidePreview();
-    const items: (MenuItem | PredefinedMenuItem)[] = [
-      await MenuItem.new({ text: app.name, enabled: false }),
-      await PredefinedMenuItem.new({ item: "Separator" }),
+    const items: MenuEntry[] = [
+      { header: app.name, image: await iconUrl(app.icon, 20) },
+      { separator: true },
     ];
     if (app.launch) {
-      items.push(
-        await MenuItem.new({
-          text: app.windows.length ? "Open new window" : "Open",
-          action: () => invoke("launch_app", { target: app.launch }),
-        }),
-      );
+      const target = app.launch;
+      items.push({
+        label: app.windows.length ? "Open new window" : "Open",
+        icon: app.windows.length ? "plus" : "open",
+        action: () => invoke("launch_app", { target }),
+      });
     }
     if (app.windows.length) {
-      items.push(
-        await MenuItem.new({
-          text: app.windows.length > 1 ? `Close all ${app.windows.length} windows` : "Close window",
-          action: () => app.windows.forEach((w) => invoke("close_window", { hwnd: w.hwnd })),
-        }),
-      );
+      const hwnds = app.windows.map((w) => w.hwnd);
+      items.push({
+        label: hwnds.length > 1 ? `Close all ${hwnds.length} windows` : "Close window",
+        icon: "close",
+        danger: true,
+        action: () => hwnds.forEach((hwnd) => invoke("close_window", { hwnd })),
+      });
     }
-    const menu = await Menu.new({ items });
-    await menu.popup();
+    await showMenu(items);
   }
 
   const isActive = (app: DockApp) => app.windows.some((w) => w.hwnd === snap.active);
@@ -135,6 +139,9 @@
         oncontextmenu={(e) => contextMenu(app, e)}
         onpointerenter={(e) => enter(app, e)}
         onpointerleave={leave}
+        animate:flip={{ duration: 220, easing: cubicOut }}
+        in:scale={{ start: 0.6, duration: 220, easing: cubicOut }}
+        out:scale={{ start: 0.6, duration: 140 }}
       >
         <AppIcon {app} size={iconPx} />
         {#if app.windows.length}
@@ -190,8 +197,8 @@
     background: var(--text-faint);
     transform: translateX(-50%);
     transition:
-      width 160ms ease,
-      background-color 160ms ease;
+      width var(--t-med) var(--ease-out),
+      background-color var(--t-med) var(--ease-out);
   }
   :global([data-edge="top"]) .dot {
     bottom: auto;
