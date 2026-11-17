@@ -19,6 +19,8 @@ export interface Settings {
   widgets: WidgetEntry[];
   autostart: boolean;
   hideTaskbar: boolean;
+  hotkeys: Hotkeys;
+  timerPresets: number[];
 }
 
 export interface WinInfo {
@@ -46,4 +48,77 @@ export interface PreviewData {
   name: string;
   icon: string;
   windows: { hwnd: number; title: string }[];
+}
+
+// ---- Phase 2 widgets
+
+export interface Hotkeys {
+  micMute: string;
+  speakerMute: string;
+}
+
+export type HotkeyState = "ok" | "off" | "invalid" | "taken";
+export interface HotkeyStatus {
+  micMute: HotkeyState;
+  speakerMute: HotkeyState;
+}
+
+export interface MediaInfo {
+  source: string;
+  sourceName: string;
+  sourceIcon: string;
+  title: string;
+  artist: string;
+  album: string;
+  playing: boolean;
+  canPrev: boolean;
+  canNext: boolean;
+  canPlayPause: boolean;
+  position: number;
+  duration: number;
+  updatedAt: number;
+  art: string | null;
+}
+
+export interface Endpoint {
+  id: string;
+  name: string;
+  volume: number;
+  muted: boolean;
+}
+
+export interface AudioState {
+  output: Endpoint | null;
+  input: Endpoint | null;
+  outputs: { id: string; name: string }[];
+}
+
+export interface DisplayInfo {
+  id: string;
+  name: string;
+  brightness: number;
+  method: "wmi" | "ddc";
+}
+
+export interface BinInfo {
+  items: number;
+  bytes: number;
+}
+
+export interface TimerState {
+  durationMs: number;
+  endsAt: number | null;
+  remainingMs: number | null;
+  ringing: boolean;
+}
+
+export interface StopwatchState {
+  startedAt: number | null;
+  elapsedMs: number;
+  laps: number[];
+}
+
+export interface TimersState {
+  timer: TimerState;
+  stopwatch: StopwatchState;
 }

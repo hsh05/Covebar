@@ -90,6 +90,10 @@
     height: 100%;
     flex: none;
   }
+  /* A widget with nothing to show (e.g. no media playing) takes no space. */
+  .slot:empty {
+    display: none;
+  }
   .slot.grow {
     flex: 1;
     min-width: 0;
