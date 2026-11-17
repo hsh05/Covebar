@@ -30,6 +30,8 @@ export interface WidgetDef {
   tile: Component;
   card?: Component;
   cardSize?: { width: number; height: number };
+  /** The card sizes itself to its content; `cardSize.height` is only the first guess. */
+  fit?: boolean;
   /** Takes the remaining width of the bar. */
   grow?: boolean;
 }
@@ -76,7 +78,8 @@ export const WIDGETS: Record<string, WidgetDef> = {
     description: "Live exchange rate with a converter and favourites; works offline from the last rates",
     tile: CurrencyTile,
     card: CurrencyCard,
-    cardSize: { width: 320, height: 372 },
+    cardSize: { width: 320, height: 260 },
+    fit: true,
   },
   claude: {
     id: "claude",
@@ -84,6 +87,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
     description: "Your Claude plan's session and weekly limits, from the Claude Code sign-in on this PC",
     tile: ClaudeTile,
     card: ClaudeCard,
+    fit: true,
   },
   temperature: {
     id: "temperature",
@@ -91,7 +95,8 @@ export const WIDGETS: Record<string, WidgetDef> = {
     description: "CPU and GPU temperature and load (temperatures need LibreHardwareMonitor running)",
     tile: TemperatureTile,
     card: TemperatureCard,
-    cardSize: { width: 300, height: 330 },
+    cardSize: { width: 300, height: 260 },
+    fit: true,
   },
   brightness: {
     id: "brightness",

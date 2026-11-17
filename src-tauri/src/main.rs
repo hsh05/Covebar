@@ -160,6 +160,11 @@ fn open_card(app: AppHandle, widget: String, anchor_x: f64, anchor_width: f64, w
 }
 
 #[tauri::command]
+fn resize_card(app: AppHandle, widget: String, height: f64) {
+    popups::resize_card(&app, &widget, height);
+}
+
+#[tauri::command]
 fn close_card(app: AppHandle, widget: Option<String>) {
     popups::close_card(&app, widget.as_deref());
 }
@@ -479,6 +484,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_settings,
             set_settings,
+            resize_card,
             get_tray,
             tray_click,
             get_temps,

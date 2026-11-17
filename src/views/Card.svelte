@@ -32,12 +32,36 @@
   });
 
   const def = $derived(widget ? WIDGETS[widget] : null);
+
+  // Cards marked `fit` size the window to their content (and follow it as it changes).
+  function fit(el: HTMLElement, id: string) {
+    let last = 0;
+    const ro = new ResizeObserver(() => {
+      const h = Math.ceil(el.offsetHeight) + 2; // + the surface's border
+      if (Math.abs(h - last) > 1) {
+        last = h;
+        invoke("resize_card", { widget: id, height: h });
+      }
+    });
+    ro.observe(el);
+    return { destroy: () => ro.disconnect() };
+  }
 </script>
 
 {#key openCount}
   {#if def?.card}
     <div class="surface" class:out={closing}>
-      <def.card />
+      {#if def.fit}
+        <div class="fit" use:fit={widget!}><def.card /></div>
+      {:else}
+        <def.card />
+      {/if}
     </div>
   {/if}
 {/key}
+
+<style>
+  .fit :global(.card) {
+    height: auto;
+  }
+</style>

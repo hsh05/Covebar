@@ -26,12 +26,4 @@
   title={r != null ? `1 ${base} = ${money(r)} ${quote}` : "Exchange rates"}
 >
   <Icon name="coins" size="var(--glyph)" />
-  <span class="value"><span class="code">{quote}</span> {r != null ? money(r) : "–"}</span>
 </button>
-
-<style>
-  .code {
-    font-weight: 500;
-    opacity: 0.75;
-  }
-</style>

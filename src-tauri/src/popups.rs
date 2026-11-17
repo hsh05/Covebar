@@ -137,11 +137,26 @@ pub fn open_card(app: &AppHandle, widget: String, anchor_x: f64, anchor_w: f64, 
     }
     hide_preview(app);
     close_menu(app);
-    place_popup(app, &card, anchor_center(app, anchor_x, anchor_w), width, height);
+    let center = anchor_center(app, anchor_x, anchor_w);
+    place_popup(app, &card, center, width, height);
+    c.center = center;
+    c.width = width;
     let _ = app.emit_to("card", "card-open", CardOpen { widget: widget.clone() });
     let _ = card.show();
     let _ = card.set_focus();
     c.open = Some(widget);
+}
+
+/// Fit the open card to its content's height (CSS px), keeping its anchor.
+pub fn resize_card(app: &AppHandle, widget: &str, height: f64) {
+    let st = app.state::<AppState>();
+    let c = st.card.lock().unwrap();
+    if c.open.as_deref() != Some(widget) {
+        return;
+    }
+    if let Some(card) = app.get_webview_window("card") {
+        place_popup(app, &card, c.center, c.width, height.clamp(60.0, 900.0));
+    }
 }
 
 /// Close the card. With `only`, close it only if that widget's card is the one open

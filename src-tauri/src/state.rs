@@ -22,6 +22,9 @@ pub struct DockGeom {
 pub struct CardState {
     pub open: Option<String>,
     pub last_closed: Option<(String, Instant)>,
+    /// Where the open card is anchored (screen-x) and its width, for `resize_card`.
+    pub center: i32,
+    pub width: f64,
 }
 
 pub struct AppState {
