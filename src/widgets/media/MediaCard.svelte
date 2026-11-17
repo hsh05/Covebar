@@ -161,8 +161,8 @@
     {/if}
 
     <div class="controls">
-      <button class="icon-btn skip" disabled={!m.canPrev} onclick={() => cmd("prev")} aria-label="Previous">
-        <Icon name="prev" size={22} />
+      <button class="icon-btn" disabled={!m.canPrev} onclick={() => cmd("prev")} aria-label="Previous">
+        <Icon name="prev" size={18} />
       </button>
       <button
         class="btn primary round big"
@@ -171,11 +171,11 @@
         aria-label={m.playing ? "Pause" : "Play"}
       >
         {#key m.playing}
-          <span class="swap" in:fade={{ duration: 160 }}><Icon name={m.playing ? "pause" : "play"} size={24} /></span>
+          <span class="swap" in:fade={{ duration: 160 }}><Icon name={m.playing ? "pause" : "play"} size={18} /></span>
         {/key}
       </button>
-      <button class="icon-btn skip" disabled={!m.canNext} onclick={() => cmd("next")} aria-label="Next">
-        <Icon name="next" size={22} />
+      <button class="icon-btn" disabled={!m.canNext} onclick={() => cmd("next")} aria-label="Next">
+        <Icon name="next" size={18} />
       </button>
     </div>
 
@@ -343,16 +343,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 22px;
+    gap: 18px;
     margin-top: -6px;
   }
-  .skip {
-    width: 38px;
-    height: 38px;
-  }
   .big {
-    width: 50px;
-    height: 50px;
+    width: 44px;
+    height: 44px;
   }
   .swap {
     display: grid;

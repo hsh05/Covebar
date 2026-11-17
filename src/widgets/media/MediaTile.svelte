@@ -11,7 +11,7 @@
   let el = $state<HTMLElement>();
 
   function open() {
-    if (el) openCard("media", el, 360, 290);
+    if (el) openCard("media", el, 360, 284);
   }
   const tip = $derived(m ? [m.title, m.artist].filter(Boolean).join(" — ") : "");
 </script>

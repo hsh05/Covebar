@@ -141,14 +141,29 @@ impl Settings {
         self.timer_presets.truncate(8);
     }
 
-    /// Bar thickness in device-independent pixels.
-    pub fn thickness_dip(&self) -> f64 {
-        let bar = match self.size {
+    /// Height of the visible bar in device-independent pixels.
+    pub fn bar_dip(&self) -> f64 {
+        match self.size {
             BarSize::Small => 48.0,
             BarSize::Large => 64.0,
-        };
-        // The pill floats with a small margin above and below it.
-        if self.shape == Shape::Pill { bar + 8.0 } else { bar }
+        }
+    }
+
+    /// The dock window's thickness: the bar plus room for the pill to float, the same in both
+    /// shapes so switching between them can animate. The extra strip is click-through.
+    pub fn window_dip(&self) -> f64 {
+        self.bar_dip() + 8.0
+    }
+
+    /// Screen space kept free of maximized windows: the full bar, or nothing for the
+    /// pill, which floats over windows.
+    pub fn reserve_dip(&self) -> f64 {
+        if self.shape == Shape::Pill { 0.0 } else { self.bar_dip() }
+    }
+
+    /// Window inner side to the visible bar.
+    pub fn inset_dip(&self) -> f64 {
+        if self.shape == Shape::Pill { 4.0 } else { 8.0 }
     }
 }
 

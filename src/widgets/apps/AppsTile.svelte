@@ -22,8 +22,8 @@
     unlistenHidden.then((f) => f());
   });
 
-  // Same sizes as the Windows taskbar uses (small / large icons).
-  const iconPx = $derived(store.s?.size === "large" ? 32 : 24);
+  // A bit larger than the Windows taskbar (24 / 32) for an easier read.
+  const iconPx = $derived(store.s?.size === "large" ? 36 : 28);
 
   // ---- hover previews
   let hoverTimer: ReturnType<typeof setTimeout> | undefined;

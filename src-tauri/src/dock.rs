@@ -20,8 +20,8 @@ pub fn place(app: &AppHandle) {
     let Some(dock) = app.get_webview_window("dock") else { return };
     let Some(h) = win::tauri_hwnd(&dock) else { return };
     let scale = win::monitor_scale(win::primary_monitor());
-    let thickness = (s.thickness_dip() * scale).round() as i32;
-    let rc = appbar::place(h, s.edge, thickness);
+    let px = |dip: f64| (dip * scale).round() as i32;
+    let rc = appbar::place(h, s.edge, px(s.reserve_dip()), px(s.window_dip()));
     *st.dock.lock().unwrap() = DockGeom {
         x: rc.left,
         y: rc.top,
@@ -29,6 +29,7 @@ pub fn place(app: &AppHandle) {
         h: rc.bottom - rc.top,
         scale,
         edge: s.edge,
+        inset: px(s.inset_dip()),
     };
 }
 

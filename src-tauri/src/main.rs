@@ -55,7 +55,14 @@ fn set_settings(app: AppHandle, state: State<AppState>, mut settings: Settings) 
         popups::hide_preview(&app);
         dock::place(&app);
     }
-    if old.theme != settings.theme || old.material != settings.material || old.shape != settings.shape {
+    if old.shape != settings.shape && settings.shape == settings::Shape::Full {
+        // Let the pill finish growing into the full bar before the backdrop appears behind it.
+        let (app, s) = (app.clone(), settings.clone());
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(340));
+            dock::apply_look(&app, &s);
+        });
+    } else if old.theme != settings.theme || old.material != settings.material || old.shape != settings.shape {
         dock::apply_look(&app, &settings);
     }
     if old.hide_taskbar != settings.hide_taskbar {
@@ -180,6 +187,21 @@ fn set_app_volume(source: String, volume: Option<f32>, muted: Option<bool>) {
     audio::set_app_volume(source, volume, muted);
 }
 
+/// The dock's visible bar, in the dock's CSS px; clicks elsewhere in its window pass through.
+#[tauri::command]
+fn set_dock_region(app: AppHandle, state: State<AppState>, x: f64, y: f64, w: f64, h: f64, full: bool) {
+    let Some(dock) = app.get_webview_window("dock") else { return };
+    let Some(hw) = win::tauri_hwnd(&dock) else { return };
+    let k = state.dock.lock().unwrap().scale;
+    let r = windows::Win32::Foundation::RECT {
+        left: (x * k).floor() as i32,
+        top: (y * k).floor() as i32,
+        right: ((x + w) * k).ceil() as i32,
+        bottom: ((y + h) * k).ceil() as i32,
+    };
+    appbar::set_hit_region(hw, (!full).then_some(r));
+}
+
 #[tauri::command]
 fn media_seek(seconds: f64) {
     media::seek(seconds);
@@ -296,7 +318,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         settings: Mutex::new(settings.clone()),
         settings_path,
         marker_path,
-        dock: Mutex::new(DockGeom { x: 0, y: 0, w: 0, h: 0, scale: 1.0, edge: settings.edge }),
+        dock: Mutex::new(DockGeom { x: 0, y: 0, w: 0, h: 0, scale: 1.0, edge: settings.edge, inset: 0 }),
         card: Mutex::new(CardState::default()),
         thumbs: Mutex::new(Vec::new()),
         preview_gen: AtomicU64::new(0),
@@ -398,6 +420,7 @@ fn main() {
             get_media,
             media_command,
             media_seek,
+            set_dock_region,
             get_app_volume,
             set_app_volume,
             get_audio,

@@ -89,8 +89,8 @@ fn content_position(app: &AppHandle, center: i32, w: i32, h: i32) -> (i32, i32) 
     let gap = (8.0 * d.scale).round() as i32;
     let x = (center - w / 2).clamp(mon.left + gap, (mon.right - w - gap).max(mon.left + gap));
     let y = match d.edge {
-        Edge::Bottom => d.y - h - gap,
-        Edge::Top => d.y + d.h + gap,
+        Edge::Bottom => d.y + d.inset - h - gap,
+        Edge::Top => d.y + d.h - d.inset + gap,
     };
     (x, y)
 }

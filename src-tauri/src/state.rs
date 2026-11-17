@@ -13,6 +13,9 @@ pub struct DockGeom {
     pub h: i32,
     pub scale: f64,
     pub edge: Edge,
+    /// Gap (physical px) between the window's inner side and the visible bar: the window is a
+    /// little taller than the bar so the pill can float and morph.
+    pub inset: i32,
 }
 
 #[derive(Default)]
