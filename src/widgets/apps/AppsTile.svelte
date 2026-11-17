@@ -92,31 +92,68 @@
       { header: app.name, image: await iconUrl(app.icon, 20) },
       { separator: true },
     ];
+    const hwnds = app.windows.map((w) => w.hwnd);
     if (app.launch) {
       const target = app.launch;
       items.push({
-        label: app.windows.length ? "Open new window" : "Open",
-        icon: app.windows.length ? "plus" : "open",
+        label: hwnds.length ? "Open new window" : "Open",
+        icon: hwnds.length ? "plus" : "open",
         action: () => invoke("launch_app", { target }),
       });
+      if (!target.startsWith("shell:"))
+        items.push({ label: "Run as administrator", icon: "shield", action: () => invoke("run_as_admin", { target }) });
     }
-    if (app.windows.length) {
-      const hwnds = app.windows.map((w) => w.hwnd);
-      items.push({
-        label: hwnds.length > 1 ? `Close all ${hwnds.length} windows` : "Close window",
-        icon: "close",
-        danger: true,
-        action: () => hwnds.forEach((hwnd) => invoke("close_window", { hwnd })),
-      });
+    if (app.location) {
+      const path = app.location;
+      items.push({ label: "Open file location", icon: "folder", action: () => invoke("open_location", { path }) });
+    }
+    if (app.pinned && app.launch) {
+      const lnk = app.launch;
+      items.push({ label: "Unpin from the bar", icon: "unpin", action: () => invoke("unpin_app", { lnk }) });
+    } else if (app.launch) {
+      const launch = app.launch;
+      items.push({ label: "Pin to the bar", icon: "pin", action: () => invoke("pin_app", { launch, name: app.name, location: app.location }) });
+    }
+    if (hwnds.length) {
+      const allMin = app.windows.every((w) => w.minimized);
+      items.push(
+        { separator: true },
+        allMin
+          ? { label: hwnds.length > 1 ? "Restore all windows" : "Restore window", icon: "restore", action: () => invoke("show_windows", { hwnds, minimize: false }) }
+          : { label: hwnds.length > 1 ? "Minimize all windows" : "Minimize window", icon: "minimize", action: () => invoke("show_windows", { hwnds, minimize: true }) },
+        {
+          label: hwnds.length > 1 ? `Close all ${hwnds.length} windows` : "Close window",
+          icon: "close",
+          danger: true,
+          action: () => hwnds.forEach((hwnd) => invoke("close_window", { hwnd })),
+        },
+      );
     }
     await showMenu(items);
+  }
+
+  // Right-click Start: shortcuts to system tools, like Windows' own Start right-click menu.
+  async function startMenu(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    hidePreview();
+    const run = (target: string) => () => invoke("launch_app", { target });
+    await showMenu([
+      { label: "Installed apps", icon: "open", action: run("ms-settings:appsfeatures") },
+      { label: "Device Manager", icon: "sliders", action: run("devmgmt.msc") },
+      { label: "Disk Management", icon: "folder", action: run("diskmgmt.msc") },
+      { label: "Task Manager", icon: "activity", action: run("taskmgr.exe") },
+      { label: "Settings", icon: "settings", action: run("ms-settings:") },
+      { label: "File Explorer", icon: "folder", action: run("explorer.exe") },
+      { label: "Run", icon: "open", action: run("shell:::{2559a1f3-21d7-11d4-bdaf-00c04f60b9f0}") },
+    ]);
   }
 
   const isActive = (app: DockApp) => app.windows.some((w) => w.hwnd === snap.active);
 </script>
 
 <div class="apps">
-  <button class="tile start" onclick={() => invoke("open_start")} data-nodrag title="Start">
+  <button class="tile start" onclick={() => invoke("open_start")} oncontextmenu={startMenu} data-nodrag title="Start">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="1.5" y="1.5" width="10" height="10" rx="0.6" />
       <rect x="12.5" y="1.5" width="10" height="10" rx="0.6" />

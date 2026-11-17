@@ -15,6 +15,7 @@ mod audio;
 mod media;
 mod worker;
 mod appbar;
+mod autohide;
 mod brightness;
 mod dock;
 mod hotkeys;
@@ -65,6 +66,9 @@ fn set_settings(app: AppHandle, state: State<AppState>, mut settings: Settings) 
     } else if old.theme != settings.theme || old.material != settings.material || old.shape != settings.shape {
         dock::apply_look(&app, &settings);
     }
+    if old.auto_hide != settings.auto_hide {
+        dock::place(&app);
+    }
     if old.hide_taskbar != settings.hide_taskbar {
         dock::set_taskbar_hidden(&app, settings.hide_taskbar);
         dock::place(&app);
@@ -113,6 +117,31 @@ fn close_window(hwnd: isize) {
 #[tauri::command]
 fn launch_app(target: String) {
     apps::launch(&target);
+}
+
+#[tauri::command]
+fn run_as_admin(target: String) {
+    apps::run_as_admin(&target);
+}
+
+#[tauri::command]
+fn open_location(path: String) {
+    apps::open_location(&path);
+}
+
+#[tauri::command]
+fn show_windows(hwnds: Vec<isize>, minimize: bool) {
+    apps::show_windows(&hwnds, minimize);
+}
+
+#[tauri::command]
+fn pin_app(launch: String, name: String, location: Option<String>) -> Result<(), String> {
+    apps::pin(&launch, &name, location)
+}
+
+#[tauri::command]
+fn unpin_app(lnk: String) -> Result<(), String> {
+    apps::unpin(&lnk)
 }
 
 #[tauri::command]
@@ -192,14 +221,15 @@ fn set_app_volume(source: String, volume: Option<f32>, muted: Option<bool>) {
 fn set_dock_region(app: AppHandle, state: State<AppState>, x: f64, y: f64, w: f64, h: f64, full: bool) {
     let Some(dock) = app.get_webview_window("dock") else { return };
     let Some(hw) = win::tauri_hwnd(&dock) else { return };
-    let k = state.dock.lock().unwrap().scale;
+    let d = *state.dock.lock().unwrap();
+    let k = d.scale;
     let r = windows::Win32::Foundation::RECT {
         left: (x * k).floor() as i32,
         top: (y * k).floor() as i32,
         right: ((x + w) * k).ceil() as i32,
         bottom: ((y + h) * k).ceil() as i32,
     };
-    appbar::set_hit_region(hw, (!full).then_some(r));
+    autohide::set_region(hw, (!full).then_some(r), &d);
 }
 
 #[tauri::command]
@@ -355,6 +385,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     recycle::start(handle.clone());
     timers::start(handle.clone(), config_dir.join("timers.json"));
     hotkeys::start(handle.clone(), settings.hotkeys.clone());
+    autohide::start(handle.clone());
     dock::start_watcher(handle);
     Ok(())
 }
@@ -421,6 +452,11 @@ fn main() {
             media_command,
             media_seek,
             set_dock_region,
+            run_as_admin,
+            open_location,
+            show_windows,
+            pin_app,
+            unpin_app,
             get_app_volume,
             set_app_volume,
             get_audio,

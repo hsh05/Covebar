@@ -92,7 +92,7 @@
   }
 </script>
 
-{#snippet toggleRow(label: string, hint: string, key: "autostart" | "hideTaskbar" | "clock24h" | "clockSeconds" | "weekStartsMonday")}
+{#snippet toggleRow(label: string, hint: string, key: "autostart" | "hideTaskbar" | "autoHide" | "clock24h" | "clockSeconds" | "weekStartsMonday")}
   <label class="row">
     <span class="text"><span class="label">{label}</span><span class="hint">{hint}</span></span>
     <input type="checkbox" class="switch" checked={s[key]} onchange={(e) => set(key, e.currentTarget.checked)} />
@@ -170,6 +170,11 @@
           "Hide the Windows taskbar",
           `The taskbar comes back when ${appName} quits, even after a crash`,
           "hideTaskbar",
+        )}
+        {@render toggleRow(
+          "Automatically hide the bar",
+          "It slides away and comes back when the pointer touches the screen edge",
+          "autoHide",
         )}
       </div>
       <div class="group">

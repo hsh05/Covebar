@@ -74,6 +74,8 @@ pub struct Settings {
     pub widgets: Vec<WidgetEntry>,
     pub autostart: bool,
     pub hide_taskbar: bool,
+    /// Slide the bar away until the cursor touches its screen edge.
+    pub auto_hide: bool,
     pub hotkeys: Hotkeys,
     /// Timer presets in seconds.
     pub timer_presets: Vec<u32>,
@@ -111,6 +113,7 @@ impl Default for Settings {
                 .collect(),
             autostart: false,
             hide_taskbar: true,
+            auto_hide: false,
             hotkeys: Hotkeys::default(),
             timer_presets: vec![60, 300, 600, 1500, 3600],
         }
@@ -156,9 +159,9 @@ impl Settings {
     }
 
     /// Screen space kept free of maximized windows: the full bar, or nothing for the
-    /// pill, which floats over windows.
+    /// pill (it floats over windows) or an auto-hiding bar.
     pub fn reserve_dip(&self) -> f64 {
-        if self.shape == Shape::Pill { 0.0 } else { self.bar_dip() }
+        if self.shape == Shape::Pill || self.auto_hide { 0.0 } else { self.bar_dip() }
     }
 
     /// Window inner side to the visible bar.

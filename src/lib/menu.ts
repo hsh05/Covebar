@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-export type MenuIcon = "settings" | "swap" | "activity" | "power" | "open" | "plus" | "close";
+export type MenuIcon =
+  | "settings" | "swap" | "activity" | "power" | "open" | "plus" | "close"
+  | "play" | "pause" | "next" | "prev" | "check" | "reset" | "timer" | "clock" | "flag" | "trash" | "sun" | "mic" | "micOff" | "speaker" | "mute" | "sliders" | "hide" | "pin" | "unpin" | "shield" | "minimize" | "restore" | "folder";
 
 /** What callers pass to `showMenu`. */
 export type MenuEntry =

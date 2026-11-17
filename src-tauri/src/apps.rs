@@ -22,7 +22,12 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_LWIN,
 };
 use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, SHGetPropertyStoreForWindow};
-use windows::Win32::UI::Shell::{IShellLinkW, ShellExecuteW, ShellLink};
+use windows::Win32::System::Com::CoTaskMemFree;
+use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
+use windows::Win32::UI::Shell::{
+    IShellLinkW, SHFileOperationW, SHParseDisplayName, ShellExecuteW, ShellLink, FOF_ALLOWUNDO,
+    FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FO_DELETE, SHFILEOPSTRUCTW,
+};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 #[derive(Serialize, Clone, PartialEq, Debug)]
@@ -41,6 +46,8 @@ pub struct DockApp {
     pub icon: String,
     pub pinned: bool,
     pub launch: Option<String>,
+    /// The program file, for "Open file location" (None for Store apps).
+    pub location: Option<String>,
     pub windows: Vec<WinInfo>,
 }
 
@@ -52,6 +59,8 @@ pub struct AppsSnapshot {
 }
 
 static DIRTY: AtomicBool = AtomicBool::new(true);
+/// Pins changed from the dock: re-read the pins folder on the next tick.
+static PINS_DIRTY: AtomicBool = AtomicBool::new(false);
 static LAST_FG: AtomicIsize = AtomicIsize::new(0);
 static SEQ: AtomicU64 = AtomicU64::new(1);
 /// Whether Start/search was the foreground window, and when it last stopped being it.
@@ -172,7 +181,7 @@ pub fn start(app: AppHandle) {
         let mut pins_read = Instant::now();
         loop {
             std::thread::sleep(Duration::from_millis(120));
-            if pins_read.elapsed() > Duration::from_secs(10) {
+            if PINS_DIRTY.swap(false, Ordering::Relaxed) || pins_read.elapsed() > Duration::from_secs(10) {
                 pins = read_pins();
                 pins_read = Instant::now();
                 DIRTY.store(true, Ordering::Relaxed);
@@ -464,6 +473,7 @@ fn build_snapshot(pins: &[Pin]) -> AppsSnapshot {
             icon: format!("path:{}", pin.lnk),
             pinned: true,
             launch: Some(pin.lnk.clone()),
+            location: pin.target.clone().filter(|t| is_program_file(t)),
             windows,
         });
     }
@@ -488,6 +498,7 @@ fn build_snapshot(pins: &[Pin]) -> AppsSnapshot {
             icon: icon_key(aumid.as_deref(), &exe),
             key,
             pinned: false,
+            location: Some(exe.clone()).filter(|e| is_program_file(e)),
             launch,
             windows,
         });
@@ -574,6 +585,129 @@ pub fn launch(target: &str) {
     unsafe {
         ShellExecuteW(None, PCWSTR(op.as_ptr()), PCWSTR(t.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
     }
+}
+
+/// Run a program or shortcut elevated (Windows shows its UAC prompt).
+pub fn run_as_admin(target: &str) {
+    if target.starts_with("shell:") {
+        return;
+    }
+    let op = wide("runas");
+    let t = wide(target);
+    unsafe {
+        ShellExecuteW(None, PCWSTR(op.as_ptr()), PCWSTR(t.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
+    }
+}
+
+fn is_program_file(p: &str) -> bool {
+    !p.to_ascii_lowercase().contains("\\windowsapps\\") && std::path::Path::new(p).is_file()
+}
+
+/// Open Explorer with the program file selected.
+pub fn open_location(path: &str) {
+    if !is_program_file(path) {
+        return;
+    }
+    let op = wide("open");
+    let exe = wide("explorer.exe");
+    let args = wide(&format!("/select,\"{path}\""));
+    unsafe {
+        ShellExecuteW(None, PCWSTR(op.as_ptr()), PCWSTR(exe.as_ptr()), PCWSTR(args.as_ptr()), PCWSTR::null(), SW_SHOWNORMAL);
+    }
+}
+
+/// Minimize or restore a set of windows.
+pub fn show_windows(hwnds: &[isize], minimize: bool) {
+    for &h in hwnds {
+        let h = hwnd(h);
+        unsafe {
+            if IsWindow(Some(h)).as_bool() {
+                let _ = ShowWindow(h, if minimize { SW_MINIMIZE } else { SW_RESTORE });
+            }
+        }
+    }
+    DIRTY.store(true, Ordering::Relaxed);
+}
+
+/// Pin an app by adding a shortcut to the taskbar pins folder (the one this dock reads).
+pub fn pin(launch: &str, name: &str, location: Option<String>) -> Result<(), String> {
+    let dir = pins_dir().ok_or("No pins folder")?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let safe: String = name
+        .chars()
+        .map(|c| if r#"\/:*?"<>|"#.contains(c) || c.is_control() { '_' } else { c })
+        .collect();
+    let path = dir.join(format!("{}.lnk", safe.trim()));
+    if path.exists() {
+        PINS_DIRTY.store(true, Ordering::Relaxed);
+        return Ok(());
+    }
+    let (launch, path) = (launch.to_string(), path.to_string_lossy().to_string());
+    // COM work on a thread of its own with COM set up.
+    std::thread::spawn(move || unsafe {
+        icons::com_init();
+        let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).map_err(|e| e.to_string())?;
+        let set_path = |target: &str| -> Result<(), String> {
+            let w = wide(target);
+            link.SetPath(PCWSTR(w.as_ptr())).map_err(|e| e.to_string())?;
+            if let Some(parent) = std::path::Path::new(target).parent() {
+                let d = wide(&parent.to_string_lossy());
+                let _ = link.SetWorkingDirectory(PCWSTR(d.as_ptr()));
+            }
+            Ok(())
+        };
+        let aumid = launch.strip_prefix("shell:AppsFolder").map(|a| a.trim_start_matches(['\\', '/']));
+        if let Some(aumid) = aumid {
+            // Store apps resolve through the Apps folder; some desktop apps register an app ID
+            // that it can't resolve, so fall back to their program file.
+            let w = wide(&launch);
+            let mut pidl = std::ptr::null_mut();
+            let parsed = SHParseDisplayName(PCWSTR(w.as_ptr()), None, &mut pidl, 0, None).is_ok();
+            if parsed {
+                let r = link.SetIDList(pidl);
+                CoTaskMemFree(Some(pidl as *const _));
+                r.map_err(|e| e.to_string())?;
+            } else {
+                set_path(location.as_deref().ok_or("Can't find this app's program")?)?;
+            }
+            // The app ID lets the pin pick up the app's open windows.
+            let store: IPropertyStore = link.cast().map_err(|e| e.to_string())?;
+            store
+                .SetValue(&PKEY_AppUserModel_ID, &PROPVARIANT::from(aumid))
+                .and_then(|_| store.Commit())
+                .map_err(|e| e.to_string())?;
+        } else {
+            set_path(&launch)?;
+        }
+        let pf: IPersistFile = link.cast().map_err(|e| e.to_string())?;
+        let p = wide(&path);
+        pf.Save(PCWSTR(p.as_ptr()), true).map_err(|e| e.to_string())
+    })
+    .join()
+    .map_err(|_| "Pinning failed".to_string())??;
+    PINS_DIRTY.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+/// Unpin: move the pin's shortcut to the Recycle Bin (only shortcuts inside the pins folder).
+pub fn unpin(lnk: &str) -> Result<(), String> {
+    let dir = pins_dir().ok_or("No pins folder")?;
+    let p = std::path::Path::new(lnk);
+    let inside = p.parent().map(|d| d.eq(dir.as_path())).unwrap_or(false);
+    if !inside || !p.is_file() || !lnk.to_ascii_lowercase().ends_with(".lnk") {
+        return Err("Not a pin".into());
+    }
+    let mut from: Vec<u16> = lnk.encode_utf16().collect();
+    from.extend([0, 0]);
+    let mut op = SHFILEOPSTRUCTW {
+        wFunc: FO_DELETE,
+        pFrom: PCWSTR(from.as_ptr()),
+        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI).0 as u16,
+        ..Default::default()
+    };
+    let r = unsafe { SHFileOperationW(&mut op) };
+    PINS_DIRTY.store(true, Ordering::Relaxed);
+    if r != 0 { Err(format!("Couldn't remove the pin ({r})")) } else { Ok(()) }
 }
 
 /// Toggle the Start menu by pressing the Windows key. If clicking the dock is what just

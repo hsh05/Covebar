@@ -23,6 +23,7 @@ export interface Settings {
   widgets: WidgetEntry[];
   autostart: boolean;
   hideTaskbar: boolean;
+  autoHide: boolean;
   hotkeys: Hotkeys;
   timerPresets: number[];
 }
@@ -39,6 +40,7 @@ export interface DockApp {
   icon: string;
   pinned: boolean;
   launch: string | null;
+  location: string | null;
   windows: WinInfo[];
 }
 

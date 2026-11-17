@@ -33,6 +33,7 @@ pub fn place(app: &AppHandle) {
         edge: s.edge,
         inset: px(s.inset_dip()),
     };
+    crate::autohide::reset();
 }
 
 /// Apply theme and backdrop material to every open Covebar window.

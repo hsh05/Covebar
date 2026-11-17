@@ -4,7 +4,8 @@
   import { flip } from "svelte/animate";
   import { cubicOut } from "svelte/easing";
   import { getName } from "@tauri-apps/api/app";
-  import { showMenu } from "../lib/menu";
+  import { showMenu, type MenuEntry } from "../lib/menu";
+  import { widgetMenu } from "../lib/widgetMenus";
   import { store, updateSettings } from "../lib/settings.svelte";
   import { WIDGETS } from "../lib/widgets";
   import type { Edge } from "../lib/types";
@@ -206,13 +207,39 @@
     if (d?.active && d.target !== edge) updateSettings({ edge: d.target });
   }
 
+  // Right-click a widget: its own actions, then hide / customize. Widgets without a menu
+  // (the apps strip's empty space) fall through to the bar menu.
+  async function slotMenu(e: MouseEvent, id: string) {
+    const def = WIDGETS[id];
+    if (!def || def.grow) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const openCard = () => slots[id]?.querySelector<HTMLElement>(".tile")?.click();
+    const own = widgetMenu(id, openCard);
+    const hide = () =>
+      updateSettings({ widgets: (store.s?.widgets ?? []).map((w) => (w.id === id ? { ...w, enabled: false } : w)) });
+    const entries: MenuEntry[] = [
+      ...own,
+      ...(own.length ? [{ separator: true } as const] : []),
+      { label: `Hide ${def.name.toLowerCase()} from the bar`, icon: "hide", action: hide },
+      { label: "Customize widgets…", icon: "settings", action: () => invoke("open_settings") },
+    ];
+    await showMenu(entries);
+  }
+
   async function menu(e: MouseEvent) {
     e.preventDefault();
     const other: Edge = edge === "bottom" ? "top" : "bottom";
+    const autoHide = store.s?.autoHide ?? false;
     await showMenu([
       { label: "Task Manager", icon: "activity", action: () => invoke("launch_app", { target: "taskmgr.exe" }) },
       { label: `${appName} settings`, icon: "settings", action: () => invoke("open_settings") },
       { label: `Move bar to the ${other}`, icon: "swap", action: () => updateSettings({ edge: other }) },
+      {
+        label: "Automatically hide the bar",
+        icon: autoHide ? "check" : undefined,
+        action: () => updateSettings({ autoHide: !autoHide }),
+      },
       { separator: true },
       { label: `Quit ${appName}`, icon: "power", danger: true, action: () => invoke("quit") },
     ]);
@@ -257,6 +284,7 @@
       bind:this={slots[id]}
       style:transform={dragging ? `translateX(${wdrag!.dx}px) scale(1.04)` : null}
       onpointerdown={(e) => slotDown(e, id)}
+      oncontextmenu={(e) => slotMenu(e, id)}
       animate:slide
     >
       <w.tile />
