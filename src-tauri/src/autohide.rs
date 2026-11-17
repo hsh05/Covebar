@@ -93,10 +93,15 @@ fn slide(app: &AppHandle, to: i32) {
     }
 }
 
+/// A card, menu or preview is up, or the settings window is open (so you can see your
+/// changes on the bar).
 fn popups_open(app: &AppHandle) -> bool {
-    ["card", "menu", "preview"]
-        .iter()
-        .any(|l| app.get_webview_window(l).and_then(|w| w.is_visible().ok()).unwrap_or(false))
+    let shown = |l: &str| {
+        app.get_webview_window(l)
+            .map(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false))
+            .unwrap_or(false)
+    };
+    ["card", "menu", "preview", "settings"].into_iter().any(shown)
 }
 
 pub fn start(app: AppHandle) {
@@ -131,15 +136,15 @@ pub fn start(app: AppHandle) {
                 };
 
             if is_hidden() {
-                if at_edge && !buttons_down() {
+                if (at_edge && !buttons_down()) || popups_open(&app) {
                     slide(&app, 0);
                     last_needed = Instant::now();
                 }
                 continue;
             }
 
-            // Shown: stay while the cursor is over the bar, a popup is open, a drag is going on
-            // or Start/search is up.
+            // Shown: stay while the cursor is over the bar, a popup or the settings window is
+            // open, a drag is going on or Start/search is up.
             let bar = REGION.lock().unwrap().0.unwrap_or(RECT { left: 0, top: 0, right: d.w, bottom: d.h });
             let slack = 6;
             let over_bar = pt.x >= d.x + bar.left - slack

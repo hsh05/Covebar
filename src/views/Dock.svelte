@@ -328,47 +328,88 @@
     border-color: var(--surface-line);
     box-shadow: 0 2px 6px rgb(0 0 0 / 0.22);
   }
-  /* Liquid glass: the window blurs what's behind it; this adds a faint tint, a sheen that
-     catches light from above and bright rims, like a lens. */
+  /* Liquid glass, like a thick clear lens: almost no tint, the blurred desktop shows
+     through, and the light lives on the rim. It is brightest where it faces the light (top
+     left) and where light bounces back out (bottom right), with a soft glow just inside the
+     edge that gives the glass its thickness. */
   .glass .bg,
   .glass .bg.pill,
   .glass .bg.morphing {
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.03) 48%, rgb(255 255 255 / 0.07)),
-      var(--glass-tint);
-    border-color: rgb(255 255 255 / 0.2);
-    border-top-color: rgb(255 255 255 / 0.42);
+    background: var(--glass-tint);
+    border-color: transparent;
     box-shadow:
-      inset 0 1px 1px rgb(255 255 255 / 0.28),
-      inset 0 -1px 1px rgb(255 255 255 / 0.1),
-      inset 0 0 14px rgb(255 255 255 / 0.06);
+      inset 2px 3px 2px -2px rgb(255 255 255 / 0.55),
+      inset -2px -3px 2px -2px rgb(255 255 255 / 0.32),
+      inset 0 0 12px rgb(255 255 255 / 0.1),
+      inset 0 -12px 16px -12px rgb(255 255 255 / 0.2);
   }
-  .glass.top .bg {
-    border-top-color: rgb(255 255 255 / 0.2);
-    border-bottom-color: rgb(255 255 255 / 0.32);
+  /* The rim: a gradient ring, bright at the corners that catch the light. */
+  .glass .bg::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1.5px;
+    pointer-events: none;
+    background: linear-gradient(
+      135deg,
+      rgb(255 255 255 / 0.9),
+      rgb(255 255 255 / 0.2) 28%,
+      rgb(255 255 255 / 0.06) 52%,
+      rgb(255 255 255 / 0.22) 78%,
+      rgb(255 255 255 / 0.75)
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
   }
   /* The full bar only has a rim along its open side. */
-  .glass .bg:not(.pill) {
-    border-left-color: transparent;
-    border-right-color: transparent;
+  .glass .bg:not(.pill)::before {
+    padding: 1.5px 0 0;
+    background: linear-gradient(90deg, rgb(255 255 255 / 0.25), rgb(255 255 255 / 0.6) 50%, rgb(255 255 255 / 0.25));
   }
-  .glass:not(.top) .bg:not(.pill) {
-    border-bottom-color: transparent;
+  .glass.top .bg:not(.pill)::before {
+    padding: 0 0 1.5px;
   }
-  .glass.top .bg:not(.pill) {
-    border-top-color: transparent;
-  }
-  /* A soft highlight sweeping across the top, as light bends through the edge. */
+  /* Light pooling inside the glass, top left, and a faint caustic bottom right. */
   .glass .bg::after {
     content: "";
     position: absolute;
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    background: radial-gradient(120% 90% at 20% -30%, rgb(255 255 255 / 0.22), transparent 55%);
+    background:
+      radial-gradient(70% 140% at 12% -10%, rgb(255 255 255 / 0.16), transparent 55%),
+      radial-gradient(50% 120% at 92% 115%, rgb(255 255 255 / 0.1), transparent 60%);
+  }
+  /* Hovered and active tiles become little glass bubbles of their own. */
+  .glass .row :global(.tile) {
+    transition:
+      background-color var(--t-fast) var(--ease-out),
+      box-shadow var(--t-fast) var(--ease-out),
+      transform var(--t-fast) var(--ease-out);
+  }
+  .glass .row :global(.tile:hover),
+  .glass .row :global(.tile.active) {
+    background-color: rgb(255 255 255 / 0.08);
+    background-image: radial-gradient(130% 110% at 30% 0%, rgb(255 255 255 / 0.16), transparent 62%);
+    box-shadow:
+      inset 1.5px 2px 1px -1px rgb(255 255 255 / 0.7),
+      inset -1.5px -2px 1px -1px rgb(255 255 255 / 0.35),
+      inset 0 0 0 1px rgb(255 255 255 / 0.12),
+      inset 0 0 8px rgb(255 255 255 / 0.08),
+      0 2px 8px rgb(0 0 0 / 0.14);
+  }
+  .glass .row :global(.tile:active) {
+    background-color: rgb(255 255 255 / 0.16);
   }
   :global([data-theme="dark"]) .glass .row :global(.tile) {
-    text-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+    text-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
   }
   .bg.ready {
     transition:
