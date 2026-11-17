@@ -36,6 +36,14 @@ pub enum Material {
     Mica,
 }
 
+/// Where the widgets sit along the bar.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum Align {
+    Center,
+    Left,
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct WidgetEntry {
@@ -50,6 +58,7 @@ pub struct Settings {
     pub size: BarSize,
     pub theme: ThemePref,
     pub material: Material,
+    pub align: Align,
     pub clock24h: bool,
     pub clock_seconds: bool,
     pub week_starts_monday: bool,
@@ -82,6 +91,7 @@ impl Default for Settings {
             size: BarSize::Small,
             theme: ThemePref::System,
             material: Material::Acrylic,
+            align: Align::Center,
             clock24h: true,
             clock_seconds: true,
             week_starts_monday: true,
