@@ -1,6 +1,15 @@
 // Prevents an extra console window on Windows in release.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+/// Debug-build logging to the console.
+#[macro_export]
+macro_rules! dlog {
+    ($($t:tt)*) => {{
+        #[cfg(debug_assertions)]
+        eprintln!("[covebar] {}", format!($($t)*));
+    }};
+}
+
 mod apps;
 mod appbar;
 mod dock;
@@ -61,7 +70,7 @@ fn get_apps() -> apps::AppsSnapshot {
 
 #[tauri::command]
 async fn get_icon(key: String, size: i32) -> Option<String> {
-    tauri::async_runtime::spawn_blocking(move || icons::icon_data_url(&key, size.clamp(16, 256)))
+    tauri::async_runtime::spawn_blocking(move || icons::icon_on_worker(key, size.clamp(16, 256)))
         .await
         .ok()
         .flatten()
@@ -228,7 +237,7 @@ fn main() {
             }
             return;
         }
-        Some("--dump-icons") => return apps::dump_icons(args.get(2).map(String::as_str).unwrap_or(".")),
+        Some("--dump-icons") => return apps::dump_icons(args.get(2).map(String::as_str).unwrap_or("."), args.get(3).and_then(|s| s.parse().ok()).unwrap_or(64)),
         _ => {}
     }
 

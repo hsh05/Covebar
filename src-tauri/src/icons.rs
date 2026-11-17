@@ -16,7 +16,28 @@ use windows::Win32::UI::Shell::{
     SIIGBF_ICONONLY,
 };
 
-static ICON_CACHE: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
+static ICON_CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+
+type IconJob = (String, i32, std::sync::mpsc::Sender<Option<String>>);
+static WORKER: std::sync::OnceLock<Mutex<std::sync::mpsc::Sender<IconJob>>> = std::sync::OnceLock::new();
+
+/// Load an icon on a dedicated single-threaded-apartment thread. Shell image extraction
+/// (packaged apps especially) is unreliable from pooled threads that may be in the MTA.
+pub fn icon_on_worker(key: String, size: i32) -> Option<String> {
+    let tx = WORKER.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::channel::<IconJob>();
+        std::thread::spawn(move || {
+            com_init();
+            for (key, size, reply) in rx {
+                let _ = reply.send(icon_data_url(&key, size));
+            }
+        });
+        Mutex::new(tx)
+    });
+    let (rtx, rrx) = std::sync::mpsc::channel();
+    tx.lock().unwrap().send((key, size, rtx)).ok()?;
+    rrx.recv().ok().flatten()
+}
 
 pub fn com_init() {
     unsafe {
@@ -43,7 +64,7 @@ pub fn icon_data_url(key: &str, size: i32) -> Option<String> {
         .get_or_insert_with(HashMap::new)
         .get(&cache_key)
     {
-        return hit.clone();
+        return Some(hit.clone());
     }
     com_init();
     let url = key.split('|').find_map(|part| shell_icon_png(&parsing_name(part), size)).map(|png| {
@@ -52,11 +73,13 @@ pub fn icon_data_url(key: &str, size: i32) -> Option<String> {
             base64::engine::general_purpose::STANDARD.encode(png)
         )
     });
-    ICON_CACHE
-        .lock()
-        .unwrap()
-        .get_or_insert_with(HashMap::new)
-        .insert(cache_key, url.clone());
+    match &url {
+        // Failures are not cached, so a later request can succeed.
+        Some(u) => {
+            ICON_CACHE.lock().unwrap().get_or_insert_with(HashMap::new).insert(cache_key, u.clone());
+        }
+        None => crate::dlog!("icon failed: size={size} key={key}"),
+    }
     url
 }
 
@@ -76,9 +99,13 @@ pub fn display_name(parsing: &str) -> Option<String> {
 fn shell_icon_png(parsing: &str, size: i32) -> Option<Vec<u8>> {
     let w = wide(parsing);
     unsafe {
-        let factory: IShellItemImageFactory =
-            SHCreateItemFromParsingName(PCWSTR(w.as_ptr()), None).ok()?;
-        let hbmp = factory.GetImage(SIZE { cx: size, cy: size }, SIIGBF_ICONONLY).ok()?;
+        let factory: IShellItemImageFactory = SHCreateItemFromParsingName(PCWSTR(w.as_ptr()), None)
+            .map_err(|e| crate::dlog!("  parse {parsing}: {e}"))
+            .ok()?;
+        let hbmp = factory
+            .GetImage(SIZE { cx: size, cy: size }, SIIGBF_ICONONLY)
+            .map_err(|e| crate::dlog!("  image {parsing}: {e}"))
+            .ok()?;
         let rgba = hbitmap_rgba(hbmp);
         let _ = DeleteObject(HGDIOBJ(hbmp.0));
         let (w, h, px) = rgba?;

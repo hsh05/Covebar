@@ -82,6 +82,14 @@ pub fn make_tool_window(h: HWND) {
 }
 
 /// Show a window on top without taking focus.
+/// Hide a window shown with `show_no_activate`. Tauri's own `hide()` skips windows it
+/// didn't show itself, so use the Win32 call directly.
+pub fn hide(h: HWND) {
+    unsafe {
+        let _ = ShowWindow(h, SW_HIDE);
+    }
+}
+
 pub fn show_no_activate(h: HWND) {
     unsafe {
         let _ = ShowWindow(h, SW_SHOWNOACTIVATE);

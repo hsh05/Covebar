@@ -603,12 +603,12 @@ pub fn open_start() {
 }
 
 /// Debug aid: write every dock app's icon (as the bar would get it) to `dir` as PNG files.
-pub fn dump_icons(dir: &str) {
+pub fn dump_icons(dir: &str, size: i32) {
     icons::com_init();
     let snap = build_snapshot(&read_pins());
     let _ = std::fs::create_dir_all(dir);
     for (i, a) in snap.apps.iter().enumerate() {
-        let url = icons::icon_data_url(&a.icon, 64);
+        let url = icons::icon_data_url(&a.icon, size);
         println!("{i:02} pinned={} name={:?} key={:?} ok={}", a.pinned, a.name, a.icon, url.is_some());
         if let Some(b64) = url.as_deref().and_then(|u| u.split_once(',')).map(|(_, b)| b) {
             use base64::Engine;

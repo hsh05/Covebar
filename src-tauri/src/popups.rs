@@ -187,7 +187,9 @@ pub fn hide_preview(app: &AppHandle) {
     clear_thumbnails(app);
     if let Some(pv) = app.get_webview_window("preview") {
         if pv.is_visible().unwrap_or(false) {
-            let _ = pv.hide();
+            if let Some(h) = win::tauri_hwnd(&pv) {
+                win::hide(h);
+            }
             let _ = app.emit_to("dock", "preview-hidden", ());
         }
     }

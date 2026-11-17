@@ -11,6 +11,8 @@ export function iconUrl(key: string, cssPx: number): Promise<string | null> {
   if (!p) {
     p = invoke<string | null>("get_icon", { key, size }).catch(() => null);
     cache.set(k, p);
+    // Forget failures so the next render tries again.
+    p.then((u) => u || cache.delete(k));
   }
   return p;
 }

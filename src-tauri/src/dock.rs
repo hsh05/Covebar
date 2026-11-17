@@ -153,7 +153,9 @@ pub fn start_watcher(app: AppHandle) {
                 if fs {
                     popups::close_card(&app);
                     popups::hide_preview(&app);
-                    let _ = dock.hide();
+                    if let Some(h) = win::tauri_hwnd(&dock) {
+                        win::hide(h);
+                    }
                 } else if let Some(h) = win::tauri_hwnd(&dock) {
                     win::show_no_activate(h);
                 }
