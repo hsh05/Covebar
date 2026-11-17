@@ -174,8 +174,8 @@
     height: 100vh;
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 0 6px;
+    gap: 12px;
+    padding: 0 8px;
     background: var(--tint);
     border-top: 1px solid var(--line);
   }
