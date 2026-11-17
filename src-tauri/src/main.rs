@@ -171,6 +171,11 @@ fn media_command(action: String) {
 }
 
 #[tauri::command]
+fn media_seek(seconds: f64) {
+    media::seek(seconds);
+}
+
+#[tauri::command]
 fn get_audio() -> audio::AudioState {
     audio::current()
 }
@@ -382,6 +387,7 @@ fn main() {
             hide_preview,
             get_media,
             media_command,
+            media_seek,
             get_audio,
             set_volume,
             set_mute,

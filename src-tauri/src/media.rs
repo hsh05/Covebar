@@ -27,6 +27,7 @@ pub struct MediaInfo {
     pub can_prev: bool,
     pub can_next: bool,
     pub can_play_pause: bool,
+    pub can_seek: bool,
     /// Seconds into the track at `updated_at` (unix ms), and the track length; 0 if unknown.
     pub position: f64,
     pub duration: f64,
@@ -42,6 +43,15 @@ static APP: OnceLock<AppHandle> = OnceLock::new();
 /// new status, so hold the expected value until they agree (or a short timeout passes).
 static EXPECT: Mutex<Option<(bool, Instant)>> = Mutex::new(None);
 const EXPECT_FOR: Duration = Duration::from_millis(2500);
+/// After a seek: the position asked for, when (unix ms), and when the hold started. Many
+/// players only refresh their reported position every few seconds, so trust the seek until
+/// they report something newer.
+static SEEKED: Mutex<Option<(f64, f64, Instant)>> = Mutex::new(None);
+const SEEK_FOR: Duration = Duration::from_millis(4000);
+
+fn now_ms() -> f64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64() * 1000.0).unwrap_or(0.0)
+}
 
 struct Ctx {
     manager: Option<Manager>,
@@ -66,6 +76,15 @@ fn refresh() {
             Some((want, since)) if since.elapsed() < EXPECT_FOR && i.playing != want => i.playing = want,
             Some(_) => *ex = None,
             None => {}
+        }
+        let mut sk = SEEKED.lock().unwrap();
+        if let Some((pos, at, since)) = *sk {
+            if since.elapsed() < SEEK_FOR && i.updated_at < at {
+                i.position = pos;
+                i.updated_at = at;
+            } else {
+                *sk = None;
+            }
         }
     }
     publish(info);
@@ -147,6 +166,7 @@ fn read() -> windows::core::Result<Option<MediaInfo>> {
         can_prev: controls.IsPreviousEnabled()?,
         can_next: controls.IsNextEnabled()?,
         can_play_pause: controls.IsPlayPauseToggleEnabled()? || controls.IsPlayEnabled()?,
+        can_seek: controls.IsPlaybackPositionEnabled().unwrap_or(false),
         position,
         duration: (end - start).max(0.0),
         updated_at,
@@ -164,6 +184,30 @@ fn read_art(r: &windows::Storage::Streams::IRandomAccessStreamReference) -> wind
     reader.ReadBytes(&mut buf)?;
     let ct = if ct.starts_with("image/") { ct } else { "image/png".into() };
     Ok(format!("data:{ct};base64,{}", base64::engine::general_purpose::STANDARD.encode(buf)))
+}
+
+/// Jump to `seconds` into the current track.
+pub fn seek(seconds: f64) {
+    let Some(w) = WORKER.get() else { return };
+    w.run(move || {
+        let Ok(Some(s)) = session() else { return };
+        let Ok(start) = s.GetTimelineProperties().and_then(|t| t.StartTime()) else { return };
+        let target = start.Duration + (seconds.max(0.0) * 10_000_000.0) as i64;
+        match s.TryChangePlaybackPositionAsync(target).and_then(|op| op.get()) {
+            Ok(true) => {
+                let at = now_ms();
+                *SEEKED.lock().unwrap() = Some((seconds, at, Instant::now()));
+                let cur = CURRENT.lock().unwrap().clone();
+                if let Some(mut i) = cur {
+                    i.position = seconds;
+                    i.updated_at = at;
+                    publish(Some(i));
+                }
+            }
+            Ok(false) => crate::dlog!("media seek: refused by the player"),
+            Err(e) => crate::dlog!("media seek: {e}"),
+        }
+    });
 }
 
 /// Play/pause, next or previous on the current session.

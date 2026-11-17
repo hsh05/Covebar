@@ -76,6 +76,7 @@ export interface MediaInfo {
   canPrev: boolean;
   canNext: boolean;
   canPlayPause: boolean;
+  canSeek: boolean;
   position: number;
   duration: number;
   updatedAt: number;

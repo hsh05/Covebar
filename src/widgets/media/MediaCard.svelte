@@ -24,6 +24,38 @@
   });
 
   const cmd = (action: string) => invoke("media_command", { action });
+
+  // ---- scrubbing: click or drag along the bar to pick a spot in the track
+  let scrub = $state<number | null>(null); // seconds under the pointer while dragging
+  let barEl = $state<HTMLElement>();
+  const shown = $derived(scrub ?? pos);
+
+  function at(e: PointerEvent) {
+    const r = barEl!.getBoundingClientRect();
+    return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (m?.duration ?? 0);
+  }
+  function scrubDown(e: PointerEvent) {
+    if (e.button !== 0 || !m?.canSeek) return;
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    scrub = at(e);
+  }
+  function scrubMove(e: PointerEvent) {
+    if (scrub != null) scrub = at(e);
+  }
+  function scrubUp() {
+    if (scrub == null) return;
+    invoke("media_seek", { seconds: scrub });
+    // Keep showing the picked spot until the player confirms it.
+    const picked = scrub;
+    setTimeout(() => scrub === picked && (scrub = null), 300);
+  }
+  function scrubKey(e: KeyboardEvent) {
+    if (!m?.canSeek) return;
+    const step = e.key === "ArrowRight" ? 5 : e.key === "ArrowLeft" ? -5 : 0;
+    if (!step) return;
+    e.preventDefault();
+    invoke("media_seek", { seconds: Math.min(m.duration, Math.max(0, pos + step)) });
+  }
 </script>
 
 <div class="card">
@@ -53,8 +85,31 @@
 
     {#if m.duration > 0}
       <div class="progress">
-        <div class="bar"><div class="fill" style:width="{(pos / m.duration) * 100}%"></div></div>
-        <div class="times"><span>{mmss(pos)}</span><span>{mmss(m.duration)}</span></div>
+        <div
+          class="scrub"
+          class:can={m.canSeek}
+          class:active={scrub != null}
+          bind:this={barEl}
+          role="slider"
+          tabindex={m.canSeek ? 0 : -1}
+          aria-label="Playback position"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(m.duration)}
+          aria-valuenow={Math.round(shown)}
+          aria-valuetext={mmss(shown)}
+          title={m.canSeek ? "" : `${m.sourceName} doesn't allow seeking`}
+          onpointerdown={scrubDown}
+          onpointermove={scrubMove}
+          onpointerup={scrubUp}
+          onpointercancel={() => (scrub = null)}
+          onkeydown={scrubKey}
+        >
+          <div class="bar">
+            <div class="fill" style:width="{(shown / m.duration) * 100}%"></div>
+          </div>
+          <div class="knob" style:left="{(shown / m.duration) * 100}%"></div>
+        </div>
+        <div class="times"><span>{mmss(shown)}</span><span>{mmss(m.duration)}</span></div>
       </div>
     {/if}
 
@@ -155,17 +210,58 @@
     flex-direction: column;
     gap: 4px;
   }
+  /* Tall invisible hit area around the thin bar so it's easy to grab. */
+  .scrub {
+    position: relative;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    outline: none;
+  }
   .bar {
+    width: 100%;
     height: 4px;
     border-radius: 2px;
     background: var(--line);
     overflow: hidden;
+    transition: height var(--t-fast) var(--ease-out);
   }
   .fill {
     height: 100%;
     background: var(--accent);
     border-radius: 2px;
     transition: width 500ms linear;
+  }
+  .active .fill,
+  .active .knob {
+    transition: none;
+  }
+  .knob {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    margin-left: -6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    transform: translateY(-50%) scale(0);
+    transition:
+      transform var(--t-fast) var(--ease-out),
+      left 500ms linear;
+  }
+  .scrub.can:hover .bar,
+  .scrub.can:focus-visible .bar,
+  .scrub.active .bar {
+    height: 6px;
+  }
+  .scrub.can:hover .knob,
+  .scrub.can:focus-visible .knob,
+  .scrub.active .knob {
+    transform: translateY(-50%) scale(1);
+  }
+  .scrub.active .knob {
+    transform: translateY(-50%) scale(1.2);
   }
   .times {
     display: flex;
