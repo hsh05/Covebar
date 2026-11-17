@@ -58,6 +58,14 @@ pub fn current() -> AudioState {
 fn refresh() {
     let st = read().unwrap_or_default();
     let mut cur = CURRENT.lock().unwrap();
+    // Mic switched on or off (by us, a hotkey or another app): flash the big indicator.
+    if let (Some(prev), Some(now)) = (cur.as_ref().and_then(|c| c.input.as_ref()), st.input.as_ref()) {
+        if prev.id == now.id && prev.muted != now.muted {
+            if let Some(app) = APP.get() {
+                crate::popups::show_osd(app, "mic", !now.muted);
+            }
+        }
+    }
     if cur.as_ref() != Some(&st) {
         *cur = Some(st.clone());
         if let Some(app) = APP.get() {

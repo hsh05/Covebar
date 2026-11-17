@@ -6,6 +6,7 @@
   import Preview from "./views/Preview.svelte";
   import Menu from "./views/Menu.svelte";
   import Settings from "./views/Settings.svelte";
+  import Osd from "./views/Osd.svelte";
 
   const label = getCurrentWebviewWindow().label;
   const ready = initSettings();
@@ -35,5 +36,7 @@
     <Menu />
   {:else if label === "settings"}
     <Settings />
+  {:else if label === "osd"}
+    <Osd />
   {/if}
 {/await}

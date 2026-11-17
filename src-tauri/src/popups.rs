@@ -20,7 +20,7 @@ use windows::Win32::Graphics::Dwm::{
 pub const PAD: f64 = 16.0;
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    for (label, w, h) in [("card", 320.0, 360.0), ("preview", 240.0, 180.0), ("menu", 240.0, 200.0)] {
+    for (label, w, h) in [("card", 320.0, 360.0), ("preview", 240.0, 180.0), ("menu", 240.0, 200.0), ("osd", OSD_SIZE, OSD_SIZE)] {
         let win = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
             .title(app.package_info().name.clone())
             .decorations(false)
@@ -37,8 +37,48 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         if let Some(h) = win::tauri_hwnd(&win) {
             win::make_tool_window(h);
         }
+        if label == "osd" {
+            // Purely informational: clicks go straight through to whatever is underneath.
+            let _ = win.set_ignore_cursor_events(true);
+        }
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------- on-screen display
+
+/// Size (CSS px) of the on-screen display's content, without the shadow margin.
+const OSD_SIZE: f64 = 200.0;
+static OSD_SESSION: AtomicU64 = AtomicU64::new(0);
+
+/// Flash a big indicator in the middle of the primary monitor (e.g. "Microphone muted"),
+/// without taking focus. Repeated calls restart its timer.
+pub fn show_osd(app: &AppHandle, kind: &str, on: bool) {
+    let Some(osd) = app.get_webview_window("osd") else { return };
+    let Some(h) = win::tauri_hwnd(&osd) else { return };
+    let me = OSD_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
+    let mon = win::monitor_rect(win::primary_monitor());
+    let scale = win::monitor_scale(win::primary_monitor());
+    let full = ((OSD_SIZE + 2.0 * PAD) * scale).round() as i32;
+    let x = (mon.left + mon.right - full) / 2;
+    let y = (mon.top + mon.bottom - full) / 2;
+    let _ = osd.set_size(PhysicalSize::new(full as u32, full as u32));
+    let _ = osd.set_position(PhysicalPosition::new(x, y));
+    let _ = app.emit_to("osd", "osd-show", serde_json::json!({ "kind": kind, "on": on, "session": me }));
+    win::show_no_activate(h);
+    let app = app.clone();
+    let hw = win::hval(h);
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(1300));
+        if OSD_SESSION.load(Ordering::SeqCst) != me {
+            return;
+        }
+        let _ = app.emit_to("osd", "osd-out", me);
+        std::thread::sleep(Duration::from_millis(260));
+        if OSD_SESSION.load(Ordering::SeqCst) == me {
+            win::hide(win::hwnd(hw));
+        }
+    });
 }
 
 /// Top-left of a `w`x`h` (physical px) content box centred on screen-x `center`, next to the dock.
