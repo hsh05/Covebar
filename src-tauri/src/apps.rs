@@ -591,10 +591,48 @@ pub fn open_media_source(aumid: &str) {
         .map(|w| w.hwnd)
         .collect();
     let best = with_book(|b| wins.iter().copied().max_by_key(|h| b.last_active.get(h).copied().unwrap_or(0)));
-    match best {
-        Some(h) => activate(hwnd(h)),
-        None if !aumid.is_empty() => launch(&format!("shell:AppsFolder\\{aumid}")),
-        None => {}
+    if let Some(h) = best {
+        crate::dlog!("media source {aumid}: activating window");
+        activate(hwnd(h));
+        return;
+    }
+    // No window (e.g. Spotify closed to its tray icon): starting the program again makes a
+    // single-instance app show its window. Store apps start through their app id.
+    if aumid.contains('!') {
+        crate::dlog!("media source {aumid}: launching app id");
+        launch(&format!("shell:AppsFolder\\{aumid}"));
+    } else if let Some(exe) = running_exe(&tokens) {
+        crate::dlog!("media source {aumid}: relaunching its program");
+        launch(&exe);
+    } else {
+        crate::dlog!("media source {aumid}: nothing to open");
+    }
+}
+
+/// Path of a running program whose file name matches one of `tokens`.
+fn running_exe(tokens: &[String]) -> Option<String> {
+    use windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+    };
+    unsafe {
+        let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok()?;
+        let mut e = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        let mut found = None;
+        let mut ok = Process32FirstW(snap, &mut e).is_ok();
+        while ok {
+            let len = e.szExeFile.iter().position(|c| *c == 0).unwrap_or(e.szExeFile.len());
+            let name = String::from_utf16_lossy(&e.szExeFile[..len]).to_lowercase();
+            let stem = name.trim_end_matches(".exe");
+            if tokens.iter().any(|t| t == stem) {
+                if let Some(p) = win::process_path(e.th32ProcessID) {
+                    found = Some(p);
+                    break;
+                }
+            }
+            ok = Process32NextW(snap, &mut e).is_ok();
+        }
+        let _ = windows::Win32::Foundation::CloseHandle(snap);
+        found
     }
 }
 
