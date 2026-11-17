@@ -4,7 +4,7 @@ use crate::worker::{com_mta, Worker};
 use base64::Engine;
 use serde::Serialize;
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSession as Session,
@@ -37,6 +37,11 @@ pub struct MediaInfo {
 
 static WORKER: OnceLock<Worker> = OnceLock::new();
 static CURRENT: Mutex<Option<MediaInfo>> = Mutex::new(None);
+static APP: OnceLock<AppHandle> = OnceLock::new();
+/// After a play/pause click the icon flips at once; players can take a second to report the
+/// new status, so hold the expected value until they agree (or a short timeout passes).
+static EXPECT: Mutex<Option<(bool, Instant)>> = Mutex::new(None);
+const EXPECT_FOR: Duration = Duration::from_millis(2500);
 
 struct Ctx {
     manager: Option<Manager>,
@@ -49,16 +54,31 @@ thread_local! {
 }
 
 pub fn start(app: AppHandle) {
-    WORKER.get_or_init(|| {
-        Worker::spawn(com_mta, Duration::from_millis(800), move || {
-            let info = read().ok().flatten();
-            let mut cur = CURRENT.lock().unwrap();
-            if *cur != info {
-                *cur = info.clone();
-                let _ = app.emit("media-changed", info);
-            }
-        })
-    });
+    let _ = APP.set(app);
+    WORKER.get_or_init(|| Worker::spawn(com_mta, Duration::from_millis(500), refresh));
+}
+
+fn refresh() {
+    let mut info = read().ok().flatten();
+    if let Some(i) = info.as_mut() {
+        let mut ex = EXPECT.lock().unwrap();
+        match *ex {
+            Some((want, since)) if since.elapsed() < EXPECT_FOR && i.playing != want => i.playing = want,
+            Some(_) => *ex = None,
+            None => {}
+        }
+    }
+    publish(info);
+}
+
+fn publish(info: Option<MediaInfo>) {
+    let mut cur = CURRENT.lock().unwrap();
+    if *cur != info {
+        *cur = info.clone();
+        if let Some(app) = APP.get() {
+            let _ = app.emit("media-changed", info);
+        }
+    }
 }
 
 pub fn current() -> Option<MediaInfo> {
@@ -157,8 +177,19 @@ pub fn command(action: String) {
             "prev" => s.TrySkipPreviousAsync().and_then(|op| op.get()),
             _ => return,
         };
-        if let Err(e) = r {
-            crate::dlog!("media {action}: {e}");
+        match r {
+            Ok(true) if action == "playPause" => {
+                // Flip the icon now instead of waiting for the player to report it.
+                let cur = CURRENT.lock().unwrap().clone();
+                if let Some(mut i) = cur {
+                    i.playing = !i.playing;
+                    *EXPECT.lock().unwrap() = Some((i.playing, Instant::now()));
+                    publish(Some(i));
+                }
+            }
+            Ok(_) => {}
+            Err(e) => crate::dlog!("media {action}: {e}"),
         }
+        refresh();
     });
 }
