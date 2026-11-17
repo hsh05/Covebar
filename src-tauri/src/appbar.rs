@@ -81,10 +81,12 @@ fn reserve_space(h: HWND, edge: Edge, thickness: i32, mon: RECT) -> RECT {
 
 /// Only the visible bar takes clicks; the rest of the window lets them through to the windows
 /// below. `rect` is in physical px relative to the window; None makes the whole window solid.
-pub fn set_hit_region(h: HWND, rect: Option<RECT>) {
-    use windows::Win32::Graphics::Gdi::{CreateRectRgn, SetWindowRgn, HRGN};
+/// A `radius` rounds the corners, which also gives a system backdrop the pill's shape.
+pub fn set_hit_region(h: HWND, rect: Option<RECT>, radius: i32) {
+    use windows::Win32::Graphics::Gdi::{CreateRectRgn, CreateRoundRectRgn, SetWindowRgn, HRGN};
     unsafe {
         let rgn = match rect {
+            Some(r) if radius > 0 => CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + 1, radius * 2, radius * 2),
             Some(r) => CreateRectRgn(r.left, r.top, r.right, r.bottom),
             None => HRGN::default(),
         };

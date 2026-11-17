@@ -18,7 +18,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 static OFFSET: AtomicI32 = AtomicI32::new(0);
 /// The clickable part of the dock as the dock last asked for it (window coords, physical px).
 /// None = the whole window.
-static REGION: Mutex<Option<RECT>> = Mutex::new(None);
+static REGION: Mutex<(Option<RECT>, i32)> = Mutex::new((None, 0));
 /// Set by `reset` after the dock was re-placed, so the loop restarts its hide countdown.
 static RESET: AtomicBool = AtomicBool::new(false);
 
@@ -28,8 +28,8 @@ const SLIDE_MS: u64 = 200;
 const TRIGGER: i32 = 2;
 
 /// The dock asks for its click region through here, so a slid-away bar stays clipped.
-pub fn set_region(h: HWND, r: Option<RECT>, d: &DockGeom) {
-    *REGION.lock().unwrap() = r;
+pub fn set_region(h: HWND, r: Option<RECT>, radius: i32, d: &DockGeom) {
+    *REGION.lock().unwrap() = (r, radius);
     apply_region(h, OFFSET.load(Ordering::SeqCst), (d.w, d.h, d.edge));
 }
 
@@ -45,9 +45,9 @@ pub fn is_hidden() -> bool {
 
 /// Clip the stored region to the part of the window still on screen.
 fn apply_region(h: HWND, off: i32, (w, wh, edge): (i32, i32, Edge)) {
-    let region = *REGION.lock().unwrap();
+    let (region, radius) = *REGION.lock().unwrap();
     if off == 0 {
-        appbar::set_hit_region(h, region);
+        appbar::set_hit_region(h, region, radius);
         return;
     }
     let mut r = region.unwrap_or(RECT { left: 0, top: 0, right: w, bottom: wh });
@@ -58,7 +58,7 @@ fn apply_region(h: HWND, off: i32, (w, wh, edge): (i32, i32, Edge)) {
     if r.bottom <= r.top {
         r = RECT::default();
     }
-    appbar::set_hit_region(h, Some(r));
+    appbar::set_hit_region(h, Some(r), radius);
 }
 
 fn slide(app: &AppHandle, to: i32) {
@@ -140,7 +140,7 @@ pub fn start(app: AppHandle) {
 
             // Shown: stay while the cursor is over the bar, a popup is open, a drag is going on
             // or Start/search is up.
-            let bar = REGION.lock().unwrap().unwrap_or(RECT { left: 0, top: 0, right: d.w, bottom: d.h });
+            let bar = REGION.lock().unwrap().0.unwrap_or(RECT { left: 0, top: 0, right: d.w, bottom: d.h });
             let slack = 6;
             let over_bar = pt.x >= d.x + bar.left - slack
                 && pt.x < d.x + bar.right + slack

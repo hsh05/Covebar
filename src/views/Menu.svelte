@@ -100,7 +100,7 @@
     {#each rows as r, i (i)}
       {#if r.kind === "header"}
         <div class="header">
-          {#if r.image}<img src={r.image} alt="" width="20" height="20" />{/if}
+          {#if r.image}<img src={r.image} alt="" width="20" height="20" class="himg" />{/if}
           <span>{r.label}</span>
         </div>
       {:else if r.kind === "sep"}
@@ -145,6 +145,11 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .himg {
+    flex: none;
+    object-fit: cover;
+    border-radius: 4px;
   }
   .header span {
     overflow: hidden;

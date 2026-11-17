@@ -34,6 +34,8 @@ pub enum ThemePref {
 pub enum Material {
     Acrylic,
     Mica,
+    /// Clear blur behind a glassy, highlighted surface.
+    Glass,
 }
 
 /// A floating pill around the widgets, or a strip across the whole screen.

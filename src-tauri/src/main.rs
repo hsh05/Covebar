@@ -218,7 +218,7 @@ fn set_app_volume(source: String, volume: Option<f32>, muted: Option<bool>) {
 
 /// The dock's visible bar, in the dock's CSS px; clicks elsewhere in its window pass through.
 #[tauri::command]
-fn set_dock_region(app: AppHandle, state: State<AppState>, x: f64, y: f64, w: f64, h: f64, full: bool) {
+fn set_dock_region(app: AppHandle, state: State<AppState>, x: f64, y: f64, w: f64, h: f64, radius: Option<f64>, full: bool) {
     let Some(dock) = app.get_webview_window("dock") else { return };
     let Some(hw) = win::tauri_hwnd(&dock) else { return };
     let d = *state.dock.lock().unwrap();
@@ -229,7 +229,7 @@ fn set_dock_region(app: AppHandle, state: State<AppState>, x: f64, y: f64, w: f6
         right: ((x + w) * k).ceil() as i32,
         bottom: ((y + h) * k).ceil() as i32,
     };
-    autohide::set_region(hw, (!full).then_some(r), &d);
+    autohide::set_region(hw, (!full).then_some(r), (radius.unwrap_or(0.0) * k).round() as i32, &d);
 }
 
 #[tauri::command]

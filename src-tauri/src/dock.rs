@@ -51,6 +51,8 @@ pub fn apply_look(app: &AppHandle, s: &Settings) {
         // settings window get a system backdrop. Mica only exists on Windows 11.
         let effect = match (label, s.material) {
             ("card" | "preview" | "menu", _) => continue,
+            // Glass: a clear blur; the dock's rounded window region shapes it to the pill.
+            ("dock", Material::Glass) => Effect::Blur,
             // The pill draws its own rounded surface; a system backdrop would fill the whole strip.
             ("dock", _) if s.shape == Shape::Pill => {
                 let _ = w.set_effects(None::<tauri::utils::config::WindowEffectsConfig>);

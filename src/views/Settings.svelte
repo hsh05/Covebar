@@ -187,7 +187,7 @@
         {@render choice("Bar", s.shape, [["pill", "Pill"], ["full", "Full width"]], (v) => set("shape", v))}
         {@render choice("Widgets", s.align, [["center", "Centered"], ["left", "Left"]], (v) => set("align", v))}
         {@render choice("Size", s.size, [["small", "Small"], ["large", "Large"]], (v) => set("size", v))}
-        {@render choice("Background", s.material, [["acrylic", "Acrylic"], ["mica", "Mica"]], (v) => set("material", v))}
+        {@render choice("Background", s.material, [["acrylic", "Acrylic"], ["mica", "Mica"], ["glass", "Liquid glass"]], (v) => set("material", v))}
       </div>
       <p class="note">
         Mica needs Windows 11; on Windows 10 the bar uses Acrylic. The background applies to the full-width bar;

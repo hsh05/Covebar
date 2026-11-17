@@ -157,7 +157,7 @@ fn read() -> windows::core::Result<Option<MediaInfo>> {
     }
     Ok(Some(MediaInfo {
         source_name: source_name(&source),
-        source_icon: format!("aumid:{source}"),
+        source_icon: source_icon(&source),
         source,
         title,
         artist,
@@ -236,4 +236,21 @@ pub fn command(action: String) {
         }
         refresh();
     });
+}
+
+/// Icon key for the playing app: its app ID, then (for desktop apps such as Spotify whose
+/// ID is just their program name) the matching running program's file as a fallback.
+fn source_icon(source: &str) -> String {
+    let mut key = format!("aumid:{source}");
+    let name = source.to_ascii_lowercase();
+    if let Some(path) = crate::apps::current().apps.iter().find_map(|a| {
+        a.location.as_ref().filter(|p| {
+            let file = p.rsplit(['\\', '/']).next().unwrap_or("").to_ascii_lowercase();
+            file == name || file.trim_end_matches(".exe") == name
+        })
+    }) {
+        key.push_str("|path:");
+        key.push_str(path);
+    }
+    key
 }

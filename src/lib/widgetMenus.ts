@@ -5,6 +5,7 @@ import { audio, displays, media, recycle, timers, timersAction } from "./live.sv
 import type { MenuEntry } from "./menu";
 import { store, updateSettings } from "./settings.svelte";
 import { timerPhase } from "../widgets/timer/timer";
+import { iconUrl } from "./icons";
 
 const settingsPage = (page: string) => () => invoke("launch_app", { target: `ms-settings:${page}` });
 
@@ -15,7 +16,7 @@ function duration(sec: number) {
 }
 
 /** `openCard` is the widget's left-click action, for items that need its card. */
-export function widgetMenu(id: string, openCard: () => void): MenuEntry[] {
+export async function widgetMenu(id: string, openCard: () => void): Promise<MenuEntry[]> {
   const s = store.s;
   switch (id) {
     case "media": {
@@ -23,7 +24,8 @@ export function widgetMenu(id: string, openCard: () => void): MenuEntry[] {
       if (!m) return [{ label: "Nothing playing", icon: "play", disabled: true, action: () => {} }];
       const cmd = (action: string) => () => invoke("media_command", { action });
       return [
-        { header: m.title || m.sourceName, image: m.sourceIcon || null },
+        // Album art when there is some, else the player's icon.
+        { header: m.title || m.sourceName, image: m.art ?? (m.sourceIcon ? await iconUrl(m.sourceIcon, 20) : null) },
         { separator: true },
         {
           label: m.playing ? "Pause" : "Play",

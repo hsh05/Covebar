@@ -13,6 +13,7 @@
   color-scheme: dark;
   --tint: rgba(16, 22, 26, 0.42);
   --pill: rgba(28, 33, 37, 0.94);
+  --glass-tint: rgba(18, 22, 26, 0.22);
   --card-tint: rgba(18, 24, 28, 0.62);
   --raised: rgba(255, 255, 255, 0.06);
   --hover: rgba(255, 255, 255, 0.09);
@@ -31,6 +32,7 @@
   color-scheme: light;
   --tint: rgba(246, 249, 249, 0.46);
   --pill: rgba(249, 250, 251, 0.95);
+  --glass-tint: rgba(255, 255, 255, 0.24);
   --card-tint: rgba(250, 252, 252, 0.7);
   --raised: rgba(0, 0, 0, 0.04);
   --hover: rgba(0, 0, 0, 0.065);

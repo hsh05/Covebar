@@ -1,7 +1,7 @@
 export type Edge = "bottom" | "top";
 export type BarSize = "small" | "large";
 export type ThemePref = "system" | "dark" | "light";
-export type Material = "acrylic" | "mica";
+export type Material = "acrylic" | "mica" | "glass";
 export type Align = "center" | "left";
 export type Shape = "pill" | "full";
 

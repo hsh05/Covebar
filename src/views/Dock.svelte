@@ -17,6 +17,7 @@
   const edge = $derived<Edge>(store.s?.edge ?? "bottom");
   const centered = $derived((store.s?.align ?? "center") === "center");
   const pill = $derived((store.s?.shape ?? "pill") === "pill");
+  const glass = $derived(store.s?.material === "glass");
 
   // ---- the visible bar: measured here, drawn by .bg, and the only part of the window that
   // takes clicks (everything else passes through to the windows below)
@@ -52,6 +53,8 @@
       y,
       w: Math.min(W, b.x + b.w + pad) - x,
       h: Math.min(H, b.y + b.h + pad) - y,
+      // Glass: round the region so the blur behind takes the pill's shape.
+      radius: glass && b.r ? b.r + pad : 0,
       full: false,
     });
   }
@@ -61,7 +64,7 @@
     if (!t) return;
     const prev = bg;
     bg = t;
-    const pad = pill ? 4 : 0;
+    const pad = pill && !glass ? 4 : 0;
     if (!measured) {
       measured = true;
       sendRegion(t, pad);
@@ -74,13 +77,13 @@
     const union = { x, y, w: Math.max(prev.x + prev.w, t.x + t.w) - x, h: Math.max(prev.y + prev.h, t.y + t.h) - y, r: 0 };
     sendRegion(union, pad);
     clearTimeout(regionTimer);
-    regionTimer = setTimeout(() => sendRegion(bg, pill ? 4 : 0), 360);
+    regionTimer = setTimeout(() => sendRegion(bg, pad), 360);
   }
 
   let lastPill: boolean | undefined;
   $effect(() => {
     // Re-measure when the shape, edge, alignment, size or widgets change (after the DOM updates).
-    void [pill, edge, centered, store.s?.size, ids.length];
+    void [pill, glass, edge, centered, store.s?.size, ids.length];
     if (lastPill !== undefined && lastPill !== pill) {
       morphing = true;
       setTimeout(() => (morphing = false), 400);
@@ -215,7 +218,7 @@
     e.preventDefault();
     e.stopPropagation();
     const openCard = () => slots[id]?.querySelector<HTMLElement>(".tile")?.click();
-    const own = widgetMenu(id, openCard);
+    const own = await widgetMenu(id, openCard);
     const hide = () =>
       updateSettings({ widgets: (store.s?.widgets ?? []).map((w) => (w.id === id ? { ...w, enabled: false } : w)) });
     const entries: MenuEntry[] = [
@@ -252,6 +255,7 @@
   class:top={edge === "top"}
   class:center={centered}
   class:pill
+  class:glass
   class:dragging={drag?.active}
   onpointerdown={down}
   onpointermove={move}
@@ -323,6 +327,48 @@
   .bg.pill {
     border-color: var(--surface-line);
     box-shadow: 0 2px 6px rgb(0 0 0 / 0.22);
+  }
+  /* Liquid glass: the window blurs what's behind it; this adds a faint tint, a sheen that
+     catches light from above and bright rims, like a lens. */
+  .glass .bg,
+  .glass .bg.pill,
+  .glass .bg.morphing {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0.03) 48%, rgb(255 255 255 / 0.07)),
+      var(--glass-tint);
+    border-color: rgb(255 255 255 / 0.2);
+    border-top-color: rgb(255 255 255 / 0.42);
+    box-shadow:
+      inset 0 1px 1px rgb(255 255 255 / 0.28),
+      inset 0 -1px 1px rgb(255 255 255 / 0.1),
+      inset 0 0 14px rgb(255 255 255 / 0.06);
+  }
+  .glass.top .bg {
+    border-top-color: rgb(255 255 255 / 0.2);
+    border-bottom-color: rgb(255 255 255 / 0.32);
+  }
+  /* The full bar only has a rim along its open side. */
+  .glass .bg:not(.pill) {
+    border-left-color: transparent;
+    border-right-color: transparent;
+  }
+  .glass:not(.top) .bg:not(.pill) {
+    border-bottom-color: transparent;
+  }
+  .glass.top .bg:not(.pill) {
+    border-top-color: transparent;
+  }
+  /* A soft highlight sweeping across the top, as light bends through the edge. */
+  .glass .bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(120% 90% at 20% -30%, rgb(255 255 255 / 0.22), transparent 55%);
+  }
+  :global([data-theme="dark"]) .glass .row :global(.tile) {
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
   }
   .bg.ready {
     transition:
