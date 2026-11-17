@@ -2,7 +2,8 @@
 
 use crate::worker::{com_mta, Worker};
 use serde::Serialize;
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use windows::core::PCWSTR;
@@ -49,10 +50,42 @@ fn refresh() {
     }
 }
 
+/// Progress of an empty in flight, sent as `recycle-progress` every ~120 ms.
+#[derive(Serialize, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+struct Progress {
+    /// 0..1, never goes backwards.
+    fraction: f64,
+    deleted: u64,
+    total: u64,
+}
+
+/// Watch the bin shrink while the shell empties it and report how far along it is.
+fn watch_progress(start: BinInfo, done: Arc<AtomicBool>) {
+    let Some(app) = APP.get().cloned() else { return };
+    std::thread::spawn(move || {
+        let mut best = 0.0f64;
+        while !done.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(120));
+            let now = query();
+            let by_bytes = if start.bytes > 0 { 1.0 - now.bytes as f64 / start.bytes as f64 } else { 0.0 };
+            let by_items = if start.items > 0 { 1.0 - now.items as f64 / start.items as f64 } else { 0.0 };
+            // Leave the last bit for the real finish.
+            best = best.max(by_bytes.max(by_items).clamp(0.0, 0.97));
+            let deleted = start.items.saturating_sub(now.items);
+            let _ = app.emit("recycle-progress", Progress { fraction: best, deleted, total: start.items });
+        }
+        let _ = app.emit("recycle-progress", Progress { fraction: 1.0, deleted: start.items, total: start.items });
+    });
+}
+
 /// Empty the bin. The frontend asks for confirmation first, so no shell dialog here.
 pub fn empty() -> Result<(), String> {
     let w = WORKER.get().ok_or("not started")?;
     w.call(|| {
+        let done = Arc::new(AtomicBool::new(false));
+        watch_progress(query(), done.clone());
+        let _guard = SetOnDrop(done);
         let r = unsafe {
             SHEmptyRecycleBinW(None, PCWSTR::null(), SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND)
         };
@@ -69,4 +102,11 @@ pub fn empty() -> Result<(), String> {
 
 pub fn open() {
     crate::apps::launch("shell:RecycleBinFolder");
+}
+
+struct SetOnDrop(Arc<AtomicBool>);
+impl Drop for SetOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
 }
