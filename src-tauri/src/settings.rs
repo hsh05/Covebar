@@ -36,6 +36,14 @@ pub enum Material {
     Mica,
 }
 
+/// A floating pill around the widgets, or a strip across the whole screen.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum Shape {
+    Pill,
+    Full,
+}
+
 /// Where the widgets sit along the bar.
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -59,6 +67,7 @@ pub struct Settings {
     pub theme: ThemePref,
     pub material: Material,
     pub align: Align,
+    pub shape: Shape,
     pub clock24h: bool,
     pub clock_seconds: bool,
     pub week_starts_monday: bool,
@@ -92,6 +101,7 @@ impl Default for Settings {
             theme: ThemePref::System,
             material: Material::Acrylic,
             align: Align::Center,
+            shape: Shape::Pill,
             clock24h: true,
             clock_seconds: true,
             week_starts_monday: true,
@@ -133,10 +143,12 @@ impl Settings {
 
     /// Bar thickness in device-independent pixels.
     pub fn thickness_dip(&self) -> f64 {
-        match self.size {
+        let bar = match self.size {
             BarSize::Small => 48.0,
             BarSize::Large => 64.0,
-        }
+        };
+        // The pill floats with a small margin above and below it.
+        if self.shape == Shape::Pill { bar + 8.0 } else { bar }
     }
 }
 

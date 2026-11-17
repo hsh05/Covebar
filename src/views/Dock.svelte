@@ -15,6 +15,7 @@
   const shownIds = $derived((store.s?.widgets ?? []).filter((w) => w.enabled && WIDGETS[w.id]).map((w) => w.id));
   const edge = $derived<Edge>(store.s?.edge ?? "bottom");
   const centered = $derived((store.s?.align ?? "center") === "center");
+  const pill = $derived((store.s?.shape ?? "pill") === "pill");
 
   // ---- drag a widget along the bar to reorder it; the others slide out of the way
   let order = $state<string[] | null>(null); // live order while dragging
@@ -135,6 +136,7 @@
   class="bar"
   class:top={edge === "top"}
   class:center={centered}
+  class:pill
   class:dragging={drag?.active}
   onpointerdown={down}
   onpointermove={move}
@@ -142,6 +144,7 @@
   onpointercancel={up}
   oncontextmenu={menu}
 >
+  <div class="row">
   {#each ids as id (id)}
     {@const w = WIDGETS[id]}
     {@const dragging = wdrag?.active && wdrag.id === id}
@@ -160,6 +163,7 @@
       <w.tile />
     </div>
   {/each}
+  </div>
 
   {#if drag?.active}
     <div class="hint">
@@ -174,10 +178,47 @@
     height: 100vh;
     display: flex;
     align-items: center;
-    gap: 12px;
     padding: 0 8px;
     background: var(--tint);
     border-top: 1px solid var(--line);
+  }
+  .row {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .center .row {
+    justify-content: center;
+  }
+
+  /* Pill: the window is a transparent strip; the rounded bar wraps just the widgets. */
+  .bar.pill {
+    background: transparent;
+    border: 0;
+  }
+  .pill.center {
+    justify-content: center;
+  }
+  .pill .row {
+    flex: 0 1 auto;
+    height: var(--bar);
+    padding: 0 4px;
+    border-radius: calc(var(--bar) / 2);
+    background: var(--pill);
+    border: 1px solid var(--surface-line);
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.22);
+  }
+  /* Tiles at the ends follow the pill's curve. */
+  .pill .row > :global(.slot:first-child .tile:first-child),
+  .pill .row > :global(.slot:last-child .tile:last-child) {
+    border-radius: calc((var(--bar) - 8px) / 2);
+  }
+  .pill .slot.grow {
+    flex: 0 1 auto;
   }
   .bar.top {
     border-top: 0;
@@ -198,9 +239,6 @@
     min-width: 0;
   }
   /* Centered: everything sits together in the middle, like the Windows 11 taskbar. */
-  .center {
-    justify-content: center;
-  }
   .center .slot.grow {
     flex: 0 1 auto;
   }

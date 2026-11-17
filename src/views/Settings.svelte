@@ -179,11 +179,15 @@
     {:else if section === "Appearance"}
       <div class="group">
         {@render choice("Theme", s.theme, [["system", "System"], ["dark", "Dark"], ["light", "Light"]], (v) => set("theme", v))}
+        {@render choice("Bar", s.shape, [["pill", "Pill"], ["full", "Full width"]], (v) => set("shape", v))}
         {@render choice("Widgets", s.align, [["center", "Centered"], ["left", "Left"]], (v) => set("align", v))}
         {@render choice("Size", s.size, [["small", "Small"], ["large", "Large"]], (v) => set("size", v))}
         {@render choice("Background", s.material, [["acrylic", "Acrylic"], ["mica", "Mica"]], (v) => set("material", v))}
       </div>
-      <p class="note">Mica needs Windows 11; on Windows 10 the bar uses Acrylic.</p>
+      <p class="note">
+        Mica needs Windows 11; on Windows 10 the bar uses Acrylic. The background applies to the full-width bar;
+        the pill has its own solid look.
+      </p>
     {:else if section === "Widgets"}
       <p class="note top">Drag widgets to reorder them or move them between the lists. You can also drag them around on the bar itself.</p>
       <h2>In the bar</h2>

@@ -1,6 +1,6 @@
 //! Dock placement, look (theme + Mica/Acrylic), taskbar hiding and the fullscreen watcher.
 
-use crate::settings::{Material, Settings, ThemePref};
+use crate::settings::{Material, Settings, Shape, ThemePref};
 use crate::state::{AppState, DockGeom};
 use crate::{appbar, popups, taskbar, win};
 use std::sync::atomic::Ordering;
@@ -47,6 +47,11 @@ pub fn apply_look(app: &AppHandle, s: &Settings) {
         // settings window get a system backdrop. Mica only exists on Windows 11.
         let effect = match (label, s.material) {
             ("card" | "preview" | "menu", _) => continue,
+            // The pill draws its own rounded surface; a system backdrop would fill the whole strip.
+            ("dock", _) if s.shape == Shape::Pill => {
+                let _ = w.set_effects(None::<tauri::utils::config::WindowEffectsConfig>);
+                continue;
+            }
             ("dock", Material::Mica) if win11 => Effect::Mica,
             ("settings", _) if win11 => Effect::Mica,
             _ => Effect::Acrylic,

@@ -3,6 +3,7 @@ export type BarSize = "small" | "large";
 export type ThemePref = "system" | "dark" | "light";
 export type Material = "acrylic" | "mica";
 export type Align = "center" | "left";
+export type Shape = "pill" | "full";
 
 export interface WidgetEntry {
   id: string;
@@ -15,6 +16,7 @@ export interface Settings {
   theme: ThemePref;
   material: Material;
   align: Align;
+  shape: Shape;
   clock24h: boolean;
   clockSeconds: boolean;
   weekStartsMonday: boolean;
