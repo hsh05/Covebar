@@ -2,7 +2,18 @@
 // fetches once and then follows the backend's change events.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AudioState, BinInfo, DisplayInfo, HotkeyStatus, MediaInfo, TimersState } from "./types";
+import type {
+  AudioState,
+  BinInfo,
+  ClaudeUsage,
+  CurrencyState,
+  DisplayInfo,
+  HotkeyStatus,
+  MediaInfo,
+  Temps,
+  TimersState,
+  TrayState,
+} from "./types";
 
 function live<T>(getter: string, event: string, initial: T) {
   const box = $state<{ v: T; ready: boolean }>({ v: initial, ready: false });
@@ -34,6 +45,26 @@ export const timers = live<TimersState>("get_timers", "timers-changed", {
 export const hotkeyStatus = live<HotkeyStatus>("get_hotkey_status", "hotkeys-status", {
   micMute: "off",
   speakerMute: "off",
+});
+
+export const tray = live<TrayState>("get_tray", "tray-changed", { icons: [], hasOverflow: false, unavailable: false });
+export const temps = live<Temps>("get_temps", "temps-changed", {
+  source: "",
+  cpuTemp: null,
+  gpuTemp: null,
+  cpuLoad: null,
+  gpuLoad: null,
+  memLoad: null,
+  cpuName: null,
+  gpuName: null,
+});
+export const currency = live<CurrencyState>("get_currency", "currency-changed", { rates: null, error: null, loading: false });
+export const claude = live<ClaudeUsage>("get_claude", "claude-changed", {
+  status: "loading",
+  plan: null,
+  windows: [],
+  fetchedAt: null,
+  message: null,
 });
 
 export const timersAction = (action: string, value?: number) =>

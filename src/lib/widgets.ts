@@ -15,6 +15,13 @@ import BrightnessCard from "../widgets/brightness/BrightnessCard.svelte";
 import MicTile from "../widgets/mic/MicTile.svelte";
 import VolumeTile from "../widgets/volume/VolumeTile.svelte";
 import VolumeCard from "../widgets/volume/VolumeCard.svelte";
+import TrayTile from "../widgets/tray/TrayTile.svelte";
+import TemperatureTile from "../widgets/temperature/TemperatureTile.svelte";
+import TemperatureCard from "../widgets/temperature/TemperatureCard.svelte";
+import ClaudeTile from "../widgets/claude/ClaudeTile.svelte";
+import ClaudeCard from "../widgets/claude/ClaudeCard.svelte";
+import CurrencyTile from "../widgets/currency/CurrencyTile.svelte";
+import CurrencyCard from "../widgets/currency/CurrencyCard.svelte";
 
 export interface WidgetDef {
   id: string;
@@ -63,6 +70,29 @@ export const WIDGETS: Record<string, WidgetDef> = {
     tile: RecycleTile,
     card: RecycleCard,
   },
+  currency: {
+    id: "currency",
+    name: "Currency",
+    description: "Live exchange rate with a converter and favourites; works offline from the last rates",
+    tile: CurrencyTile,
+    card: CurrencyCard,
+    cardSize: { width: 320, height: 372 },
+  },
+  claude: {
+    id: "claude",
+    name: "Claude Usage",
+    description: "Your Claude plan's session and weekly limits, from the Claude Code sign-in on this PC",
+    tile: ClaudeTile,
+    card: ClaudeCard,
+  },
+  temperature: {
+    id: "temperature",
+    name: "Temperature",
+    description: "CPU and GPU temperature and load (temperatures need LibreHardwareMonitor running)",
+    tile: TemperatureTile,
+    card: TemperatureCard,
+    cardSize: { width: 300, height: 330 },
+  },
   brightness: {
     id: "brightness",
     name: "Brightness",
@@ -82,6 +112,12 @@ export const WIDGETS: Record<string, WidgetDef> = {
     description: "Speaker volume and output device; scroll to change, middle-click to mute",
     tile: VolumeTile,
     card: VolumeCard,
+  },
+  tray: {
+    id: "tray",
+    name: "Tray Icons",
+    description: "Your notification-area apps; click or right-click them as usual",
+    tile: TrayTile,
   },
   clock: {
     id: "clock",

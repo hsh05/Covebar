@@ -26,6 +26,11 @@ mod settings;
 mod state;
 mod taskbar;
 mod timers;
+mod tray;
+mod net;
+mod currency;
+mod temps;
+mod claude;
 mod watchdog;
 mod win;
 
@@ -292,6 +297,43 @@ fn timers_action(action: String, value: Option<u64>) -> timers::TimersState {
     timers::action(&action, value)
 }
 
+// ---------------------------------------------------------------- phase 3 widgets
+
+#[tauri::command]
+fn get_tray() -> tray::TrayState {
+    tray::current()
+}
+
+#[tauri::command]
+fn tray_click(id: String, button: String) {
+    tray::click(id, button);
+}
+
+#[tauri::command]
+fn get_temps() -> temps::Temps {
+    temps::current()
+}
+
+#[tauri::command]
+fn get_currency() -> currency::CurrencyState {
+    currency::current()
+}
+
+#[tauri::command]
+fn refresh_currency() {
+    currency::refresh();
+}
+
+#[tauri::command]
+fn get_claude() -> claude::Usage {
+    claude::current()
+}
+
+#[tauri::command]
+fn refresh_claude() {
+    claude::refresh();
+}
+
 #[tauri::command]
 fn pause_hotkeys(paused: bool) {
     hotkeys::set_paused(paused);
@@ -385,6 +427,10 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     recycle::start(handle.clone());
     timers::start(handle.clone(), config_dir.join("timers.json"));
     hotkeys::start(handle.clone(), settings.hotkeys.clone());
+    tray::start(handle.clone());
+    temps::start(handle.clone());
+    currency::start(handle.clone(), config_dir.join("currency.json"));
+    claude::start(handle.clone());
     autohide::start(handle.clone());
     dock::start_watcher(handle);
     Ok(())
@@ -432,6 +478,13 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_settings,
             set_settings,
+            get_tray,
+            tray_click,
+            get_temps,
+            get_currency,
+            refresh_currency,
+            get_claude,
+            refresh_claude,
             get_apps,
             get_icon,
             click_app,

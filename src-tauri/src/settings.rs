@@ -5,7 +5,7 @@ use std::path::Path;
 
 /// Widgets that exist in this build, in their default order.
 pub const KNOWN_WIDGETS: &[&str] =
-    &["apps", "media", "timer", "stopwatch", "recycle", "brightness", "mic", "volume", "clock"];
+    &["apps", "media", "timer", "stopwatch", "recycle", "currency", "claude", "temperature", "brightness", "mic", "volume", "tray", "clock"];
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -81,6 +81,10 @@ pub struct Settings {
     pub hotkeys: Hotkeys,
     /// Timer presets in seconds.
     pub timer_presets: Vec<u32>,
+    /// Currency widget: converting from `base` to `quote`, plus favourites listed in its card.
+    pub currency_base: String,
+    pub currency_quote: String,
+    pub currency_favorites: Vec<String>,
 }
 
 /// Global shortcuts, as strings like "Win+Alt+M". Empty disables one.
@@ -118,6 +122,9 @@ impl Default for Settings {
             auto_hide: false,
             hotkeys: Hotkeys::default(),
             timer_presets: vec![60, 300, 600, 1500, 3600],
+            currency_base: "USD".into(),
+            currency_quote: "AED".into(),
+            currency_favorites: vec!["GBP".into()],
         }
     }
 }
@@ -144,6 +151,25 @@ impl Settings {
         self.timer_presets.retain(|s| (1..=86_400).contains(s));
         self.timer_presets.dedup();
         self.timer_presets.truncate(8);
+        let code = |c: &mut String, fallback: &str| {
+            *c = c.trim().to_ascii_uppercase();
+            if c.len() != 3 || !c.chars().all(|ch| ch.is_ascii_alphabetic()) {
+                *c = fallback.into();
+            }
+        };
+        code(&mut self.currency_base, "USD");
+        code(&mut self.currency_quote, "AED");
+        for f in self.currency_favorites.iter_mut() {
+            *f = f.trim().to_ascii_uppercase();
+        }
+        self.currency_favorites.retain(|c| c.len() == 3 && c.chars().all(|ch| ch.is_ascii_alphabetic()));
+        self.currency_favorites.dedup();
+        self.currency_favorites.truncate(8);
+    }
+
+    /// The widget is on the bar.
+    pub fn has_widget(&self, id: &str) -> bool {
+        self.widgets.iter().any(|w| w.id == id && w.enabled)
     }
 
     /// Height of the visible bar in device-independent pixels.

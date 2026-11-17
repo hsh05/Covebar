@@ -26,6 +26,9 @@ export interface Settings {
   autoHide: boolean;
   hotkeys: Hotkeys;
   timerPresets: number[];
+  currencyBase: string;
+  currencyQuote: string;
+  currencyFavorites: string[];
 }
 
 export interface WinInfo {
@@ -128,4 +131,58 @@ export interface StopwatchState {
 export interface TimersState {
   timer: TimerState;
   stopwatch: StopwatchState;
+}
+
+export interface TrayIcon {
+  id: string;
+  tooltip: string;
+  image: string | null;
+  iconKey: string | null;
+}
+
+export interface TrayState {
+  icons: TrayIcon[];
+  hasOverflow: boolean;
+  unavailable: boolean;
+}
+
+export interface Temps {
+  /** "wmi" or "web" when LibreHardwareMonitor answered, "" when it isn't running. */
+  source: "wmi" | "web" | "";
+  cpuTemp: number | null;
+  gpuTemp: number | null;
+  cpuLoad: number | null;
+  gpuLoad: number | null;
+  memLoad: number | null;
+  cpuName: string | null;
+  gpuName: string | null;
+}
+
+export interface Rates {
+  rates: Record<string, number>;
+  updated: number;
+  source: string;
+}
+
+export interface CurrencyState {
+  rates: Rates | null;
+  error: string | null;
+  loading: boolean;
+}
+
+export interface UsageWindow {
+  key: "session" | "week" | "opus" | "sonnet";
+  label: string;
+  percent: number;
+  resetsAt: string | null;
+}
+
+export type UsageStatus = "ok" | "loading" | "signedOut" | "expired" | "offline" | "error";
+
+export interface ClaudeUsage {
+  status: UsageStatus;
+  plan: string | null;
+  windows: UsageWindow[];
+  fetchedAt: number | null;
+  message: string | null;
 }

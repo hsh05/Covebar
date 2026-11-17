@@ -68,3 +68,22 @@ export function presetLabel(sec: number) {
   if (sec % 60 === 0) return `${sec / 60} min`;
   return duration(sec * 1000);
 }
+
+/** Time until/since, roughly: 8100000 -> "2 h 15 min", 360000000 -> "4 d 4 h". */
+export function span(ms: number) {
+  const min = Math.max(0, Math.round(ms / 60000));
+  if (min < 1) return "less than a minute";
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return min % 60 ? `${h} h ${min % 60} min` : `${h} h`;
+  const d = Math.floor(h / 24);
+  return h % 24 ? `${d} d ${h % 24} h` : `${d} d`;
+}
+
+/** "just now", "5 min ago", "3 h ago", "2 d ago". */
+export function ago(ms: number, now = Date.now()) {
+  const d = now - ms;
+  if (d < 60000) return "just now";
+  const s = span(d).split(" ").slice(0, 2).join(" ");
+  return `${s} ago`;
+}

@@ -1,7 +1,8 @@
 // Right-click menus for the widgets on the bar. Each widget lists its own quick actions; the
 // dock adds "Hide from the bar" and "Customize widgets" underneath.
 import { invoke } from "@tauri-apps/api/core";
-import { audio, displays, media, recycle, timers, timersAction } from "./live.svelte";
+import { audio, currency, displays, media, recycle, timers, timersAction } from "./live.svelte";
+import { money, rate } from "../widgets/currency/currency";
 import type { MenuEntry } from "./menu";
 import { store, updateSettings } from "./settings.svelte";
 import { timerPhase } from "../widgets/timer/timer";
@@ -134,6 +135,37 @@ export async function widgetMenu(id: string, openCard: () => void): Promise<Menu
         { label: "Sound settings", icon: "settings", action: settingsPage("sound") },
       ];
     }
+    case "currency": {
+      const st = currency().v;
+      const base = s?.currencyBase ?? "USD";
+      const quote = s?.currencyQuote ?? "AED";
+      const favs: MenuEntry[] = (s?.currencyFavorites ?? [])
+        .filter((c) => c !== quote)
+        .map((c) => {
+          const r = rate(st.rates, base, c);
+          return { label: `Show ${c}`, hint: r != null ? money(r) : undefined, action: () => updateSettings({ currencyQuote: c }) };
+        });
+      return [
+        { label: `Swap to ${quote} → ${base}`, icon: "swap", action: () => updateSettings({ currencyBase: quote, currencyQuote: base }) },
+        ...favs,
+        { separator: true },
+        { label: "Update rates", icon: "reset", action: () => invoke("refresh_currency") },
+      ];
+    }
+    case "claude":
+      return [
+        { label: "Refresh usage", icon: "reset", action: () => invoke("refresh_claude") },
+        { label: "Open usage on claude.ai", icon: "open", action: () => invoke("launch_app", { target: "https://claude.ai/settings/usage" }) },
+      ];
+    case "temperature":
+      return [
+        { label: "Task Manager", icon: "activity", action: () => invoke("launch_app", { target: "taskmgr.exe" }) },
+      ];
+    case "tray":
+      return [
+        { label: "Show hidden icons", icon: "open", action: () => invoke("tray_click", { id: "", button: "overflow" }) },
+        { label: "Taskbar settings", icon: "settings", action: settingsPage("taskbar") },
+      ];
     case "clock":
       return [
         {

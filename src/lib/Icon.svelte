@@ -29,6 +29,14 @@
     check: '<path d="M4.5 10.5l3.5 3.5 7.5-8"/>',
     close: '<path d="M5 5l10 10M15 5L5 15"/>',
     sliders: '<path d="M3.5 6h7M14.5 6h2M3.5 14h2M9.5 14h7"/><circle cx="12.5" cy="6" r="2"/><circle cx="7.5" cy="14" r="2"/>',
+    thermo: '<path d="M8 11.6V4.5a2 2 0 0 1 4 0v7.1a3.6 3.6 0 1 1-4 0z"/><path d="M10 13.2V8"/>',
+    gauge: '<path d="M3.2 14.5a7.5 7.5 0 1 1 13.6 0"/><path d="M10 11.5l3.2-3.6"/><circle class="f" cx="10" cy="11.6" r="1.3"/>',
+    coins: '<ellipse cx="8" cy="6" rx="4.8" ry="2.3"/><path d="M3.2 6v3.4c0 1.3 2.1 2.3 4.8 2.3M3.2 9.4v3.4c0 1.3 2.1 2.3 4.8 2.3"/><ellipse cx="13" cy="11.6" rx="4.3" ry="2.1"/><path d="M8.7 11.6v3c0 1.2 1.9 2.1 4.3 2.1s4.3-.9 4.3-2.1v-3"/>',
+    swap: '<path d="M4 7h11.5M12.5 4l3 3-3 3M16 13H4.5M7.5 10l-3 3 3 3"/>',
+    chevronUp: '<path d="M5.5 12.5L10 8l4.5 4.5"/>',
+    star: '<path d="M10 3l2.1 4.4 4.8.6-3.5 3.3.9 4.8L10 13.8l-4.3 2.3.9-4.8L3.1 8l4.8-.6z"/>',
+    starFill: '<path class="f" d="M10 3l2.1 4.4 4.8.6-3.5 3.3.9 4.8L10 13.8l-4.3 2.3.9-4.8L3.1 8l4.8-.6z"/>',
+    tray: '<rect x="2.5" y="11" width="15" height="5.5" rx="1.5"/><path d="M6 13.8h.01M10 13.8h.01M14 13.8h.01M10 8.5V3.5M7.5 6L10 8.5 12.5 6"/>',
     music: '<path d="M7.5 15V4.5l9-2V13"/><circle cx="5.5" cy="15" r="2"/><circle cx="14.5" cy="13" r="2"/>',
   } as const;
 
