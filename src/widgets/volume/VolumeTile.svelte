@@ -40,7 +40,7 @@
 </script>
 
 <button
-  class="tile glyph"
+  class="tile glyph reveal"
   class:muted={out?.muted}
   bind:this={el}
   onclick={open}

@@ -60,7 +60,7 @@ fn set_settings(app: AppHandle, state: State<AppState>, mut settings: Settings) 
         // Let the pill finish growing into the full bar before the backdrop appears behind it.
         let (app, s) = (app.clone(), settings.clone());
         std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(340));
+            std::thread::sleep(std::time::Duration::from_millis(460));
             dock::apply_look(&app, &s);
         });
     } else if old.theme != settings.theme || old.material != settings.material || old.shape != settings.shape {

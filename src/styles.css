@@ -14,6 +14,7 @@
   --tint: rgba(16, 22, 26, 0.42);
   --pill: rgba(28, 33, 37, 0.94);
   --glass-tint: rgba(255, 255, 255, 0.05);
+  --glass-pill: rgba(24, 26, 30, 0.42);
   --card-tint: rgba(18, 24, 28, 0.62);
   --raised: rgba(255, 255, 255, 0.06);
   --hover: rgba(255, 255, 255, 0.09);
@@ -33,6 +34,7 @@
   --tint: rgba(246, 249, 249, 0.46);
   --pill: rgba(249, 250, 251, 0.95);
   --glass-tint: rgba(255, 255, 255, 0.16);
+  --glass-pill: rgba(255, 255, 255, 0.5);
   --card-tint: rgba(250, 252, 252, 0.7);
   --raised: rgba(0, 0, 0, 0.04);
   --hover: rgba(0, 0, 0, 0.065);
@@ -133,6 +135,31 @@ select:focus-visible {
 }
 :root[data-size="large"] .tile .value {
   font-size: 14px;
+}
+/* Icon-only tiles whose value slides out beside the icon while hovered. */
+.tile.reveal {
+  gap: 0;
+  transition:
+    gap 220ms var(--ease-out),
+    background-color var(--t-fast) var(--ease-out),
+    transform var(--t-fast) var(--ease-out);
+}
+.tile.reveal .value {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-width 220ms var(--ease-out),
+    opacity 160ms var(--ease-out);
+}
+.tile.reveal:hover,
+.tile.reveal:focus-visible {
+  gap: 6px;
+}
+.tile.reveal:hover .value,
+.tile.reveal:focus-visible .value {
+  max-width: 7ch;
+  opacity: 1;
 }
 
 .card {

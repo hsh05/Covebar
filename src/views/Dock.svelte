@@ -77,7 +77,7 @@
     const union = { x, y, w: Math.max(prev.x + prev.w, t.x + t.w) - x, h: Math.max(prev.y + prev.h, t.y + t.h) - y, r: 0 };
     sendRegion(union, pad);
     clearTimeout(regionTimer);
-    regionTimer = setTimeout(() => sendRegion(bg, pad), 360);
+    regionTimer = setTimeout(() => sendRegion(bg, pad), 480);
   }
 
   let lastPill: boolean | undefined;
@@ -86,7 +86,7 @@
     void [pill, glass, edge, centered, store.s?.size, ids.length];
     if (lastPill !== undefined && lastPill !== pill) {
       morphing = true;
-      setTimeout(() => (morphing = false), 400);
+      setTimeout(() => (morphing = false), 480);
     }
     lastPill = pill;
     untrack(update);
@@ -305,6 +305,9 @@
 
 <style>
   .bar {
+    /* Full bar <-> pill: long and gentle, settling softly at the end. */
+    --morph: 440ms;
+    --ease-morph: cubic-bezier(0.32, 0.72, 0, 1);
     position: relative;
     height: 100vh;
   }
@@ -338,26 +341,31 @@
     background: var(--glass-tint);
     border-color: transparent;
     box-shadow:
-      inset 2px 3px 2px -2px rgb(255 255 255 / 0.55),
-      inset -2px -3px 2px -2px rgb(255 255 255 / 0.32),
+      inset 2px 3px 2px -2px rgb(255 255 255 / 0.35),
+      inset -2px -3px 2px -2px rgb(255 255 255 / 0.2),
       inset 0 0 12px rgb(255 255 255 / 0.1),
       inset 0 -12px 16px -12px rgb(255 255 255 / 0.2);
+  }
+  /* The pill has no system blur behind it (Windows can't shape one to a pill), so the
+     glass gets a little more body of its own. */
+  .glass .bg.pill {
+    background: var(--glass-pill);
   }
   /* The rim: a gradient ring, bright at the corners that catch the light. */
   .glass .bg::before {
     content: "";
     position: absolute;
-    inset: -1px;
+    inset: 0;
     border-radius: inherit;
-    padding: 1.5px;
+    padding: 1px;
     pointer-events: none;
     background: linear-gradient(
       135deg,
-      rgb(255 255 255 / 0.9),
-      rgb(255 255 255 / 0.2) 28%,
-      rgb(255 255 255 / 0.06) 52%,
-      rgb(255 255 255 / 0.22) 78%,
-      rgb(255 255 255 / 0.75)
+      rgb(255 255 255 / 0.5),
+      rgb(255 255 255 / 0.1) 28%,
+      rgb(255 255 255 / 0.03) 52%,
+      rgb(255 255 255 / 0.1) 78%,
+      rgb(255 255 255 / 0.4)
     );
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
@@ -370,11 +378,11 @@
   }
   /* The full bar only has a rim along its open side. */
   .glass .bg:not(.pill)::before {
-    padding: 1.5px 0 0;
-    background: linear-gradient(90deg, rgb(255 255 255 / 0.25), rgb(255 255 255 / 0.6) 50%, rgb(255 255 255 / 0.25));
+    padding: 1px 0 0;
+    background: linear-gradient(90deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.32) 50%, rgb(255 255 255 / 0.1));
   }
   .glass.top .bg:not(.pill)::before {
-    padding: 0 0 1.5px;
+    padding: 0 0 1px;
   }
   /* Light pooling inside the glass, top left, and a faint caustic bottom right. */
   .glass .bg::after {
@@ -413,14 +421,14 @@
   }
   .bg.ready {
     transition:
-      left 320ms var(--ease-out),
-      top 320ms var(--ease-out),
-      width 320ms var(--ease-out),
-      height 320ms var(--ease-out),
-      border-radius 320ms var(--ease-out),
-      border-color 320ms var(--ease-out),
-      box-shadow 320ms var(--ease-out),
-      background-color 220ms var(--ease-out);
+      left var(--morph) var(--ease-morph),
+      top var(--morph) var(--ease-morph),
+      width var(--morph) var(--ease-morph),
+      height var(--morph) var(--ease-morph),
+      border-radius var(--morph) var(--ease-morph),
+      border-color var(--morph) var(--ease-morph),
+      box-shadow var(--morph) var(--ease-morph),
+      background-color 300ms var(--ease-out);
   }
 
   .row {
@@ -439,8 +447,9 @@
   }
   .row.ready {
     transition:
-      top 320ms var(--ease-out),
-      bottom 320ms var(--ease-out);
+      top var(--morph) var(--ease-morph),
+      bottom var(--morph) var(--ease-morph),
+      padding var(--morph) var(--ease-morph);
   }
   .center .row {
     justify-content: center;

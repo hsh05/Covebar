@@ -28,7 +28,7 @@
 </script>
 
 <button
-  class="tile glyph"
+  class="tile glyph reveal"
   bind:this={el}
   onclick={open}
   onwheel={level.wheel}
