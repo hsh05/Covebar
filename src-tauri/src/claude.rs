@@ -39,6 +39,17 @@ static WORKER: OnceLock<Worker> = OnceLock::new();
 static STATE: Mutex<Option<Usage>> = Mutex::new(None);
 static APP: OnceLock<AppHandle> = OnceLock::new();
 static NEXT: Mutex<Option<Instant>> = Mutex::new(None);
+/// The Claude Code command-line tool couldn't be started, so expired sign-ins can't be renewed.
+static NO_CLI: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// What to tell the user when the saved sign-in has expired.
+fn expired_message() -> &'static str {
+    if NO_CLI.load(std::sync::atomic::Ordering::Relaxed) {
+        "Your Claude Code sign-in expired. Install the Claude Code command-line tool so Covebar can renew it, or run claude once in a terminal."
+    } else {
+        "Your Claude Code sign-in expired. Run claude once in a terminal to renew it."
+    }
+}
 
 const EVERY: Duration = Duration::from_secs(5 * 60);
 const BACKOFF: Duration = Duration::from_secs(15 * 60);
@@ -155,11 +166,18 @@ fn renew_signin() -> bool {
         .spawn();
     let Ok(mut child) = child else {
         crate::dlog!("claude usage: Claude Code CLI not found");
+        NO_CLI.store(true, std::sync::atomic::Ordering::Relaxed);
         return false;
     };
+    NO_CLI.store(false, std::sync::atomic::Ordering::Relaxed);
     let started = Instant::now();
     loop {
         match child.try_wait() {
+            // `cmd /c claude` runs even when there's no claude; it then exits with 9009.
+            Ok(Some(status)) if status.code() == Some(9009) => {
+                NO_CLI.store(true, std::sync::atomic::Ordering::Relaxed);
+                return false;
+            }
             Ok(Some(status)) => {
                 crate::dlog!("claude usage: asked Claude Code to renew its sign-in ({status})");
                 return status.success();
@@ -194,7 +212,7 @@ fn fetch_once(may_renew: bool) {
             return fetch_once(false);
         }
         *NEXT.lock().unwrap() = Some(Instant::now() + Duration::from_secs(60));
-        return publish(with_status("expired", "Open Claude Code once to refresh your sign-in", plan));
+        return publish(with_status("expired", expired_message(), plan));
     }
 
     let auth = format!("Bearer {}", creds.token);
@@ -213,7 +231,7 @@ fn fetch_once(may_renew: bool) {
         Ok((401 | 403, _)) if may_renew && renew_signin() => return fetch_once(false),
         Ok((401 | 403, _)) => (
             Duration::from_secs(60),
-            with_status("expired", "Open Claude Code once to refresh your sign-in", plan),
+            with_status("expired", expired_message(), plan),
         ),
         Ok((429, _)) => (BACKOFF, with_status("error", "Usage service is busy; trying again later", plan)),
         Ok((status, _)) => {
