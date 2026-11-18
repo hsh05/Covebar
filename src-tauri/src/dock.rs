@@ -140,15 +140,34 @@ fn fullscreen_on_primary() -> bool {
     }
 }
 
-/// Shell surfaces (Start, search, flyouts) during which the taskbar must not be forced hidden.
-fn shell_ui_in_front() -> bool {
+/// Start, search or a shell flyout is open or opening: Explorer shows its taskbar with them,
+/// so it must not be forced hidden. The taskbar being the active window doesn't count; it
+/// becomes that when Windows reveals it, e.g. as a screenshot overlay closes.
+fn taskbar_may_show() -> bool {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LWIN, VK_RWIN};
+    let held = |k: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY| unsafe { GetAsyncKeyState(k.0 as i32) as u16 & 0x8000 != 0 };
+    if held(VK_LWIN) || held(VK_RWIN) || win::start_open() {
+        return true;
+    }
     let fg = unsafe { GetForegroundWindow() };
-    fg.is_invalid() || win::is_shell_ui(fg)
+    win::is_shell_ui(fg) && !matches!(win::class_name(fg).as_str(), "Shell_TrayWnd" | "Shell_SecondaryTrayWnd")
+}
+
+static WATCH_APP: std::sync::OnceLock<AppHandle> = std::sync::OnceLock::new();
+
+/// Explorer just showed a taskbar window: hide it again right away instead of at the next
+/// tick of the watcher, so it doesn't flash.
+pub fn tray_shown() {
+    let Some(app) = WATCH_APP.get() else { return };
+    if app.state::<AppState>().taskbar_hidden.load(Ordering::SeqCst) && !taskbar_may_show() {
+        taskbar::reassert_hidden();
+    }
 }
 
 /// Background loop: fullscreen hiding, keeping the taskbar hidden, and recovering from
 /// Explorer restarts or display changes.
 pub fn start_watcher(app: AppHandle) {
+    let _ = WATCH_APP.set(app.clone());
     std::thread::spawn(move || {
         let mut last_tray = taskbar::primary_tray().map(win::hval).unwrap_or(0);
         let mut last_mon = win::monitor_rect(win::primary_monitor());
@@ -176,7 +195,7 @@ pub fn start_watcher(app: AppHandle) {
                 continue;
             }
 
-            if hide_tb && !shell_ui_in_front() {
+            if hide_tb && !taskbar_may_show() {
                 taskbar::reassert_hidden();
             }
 

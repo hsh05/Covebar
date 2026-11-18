@@ -181,3 +181,32 @@ pub fn is_start_ui(h: HWND) -> bool {
     let exe = process_path(window_pid(h)).unwrap_or_default();
     matches!(file_stem_lower(&exe).as_str(), "startmenuexperiencehost" | "searchhost" | "searchapp")
 }
+
+/// The window is hidden by DWM (closed Start, suspended UWP apps, other desktops).
+pub fn is_cloaked(h: HWND) -> bool {
+    use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
+    let mut v: u32 = 0;
+    unsafe { DwmGetWindowAttribute(h, DWMWA_CLOAKED, &mut v as *mut _ as *mut _, 4).is_ok() && v != 0 }
+}
+
+/// Start or search is on screen. Their windows stay around (cloaked) while closed.
+pub fn start_open() -> bool {
+    use windows::core::BOOL;
+    use windows::Win32::Foundation::LPARAM;
+    unsafe extern "system" fn each(h: HWND, lp: LPARAM) -> BOOL {
+        if class_name(h) == "Windows.UI.Core.CoreWindow"
+            && IsWindowVisible(h).as_bool()
+            && !is_cloaked(h)
+            && is_start_ui(h)
+        {
+            *(lp.0 as *mut bool) = true;
+            return BOOL(0);
+        }
+        BOOL(1)
+    }
+    let mut open = false;
+    unsafe {
+        let _ = EnumWindows(Some(each), LPARAM(&mut open as *mut bool as isize));
+    }
+    open
+}

@@ -11,7 +11,7 @@ use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{HWND, LPARAM};
 use windows::Win32::UI::Shell::{SHAppBarMessage, ABM_GETSTATE, ABM_SETSTATE, APPBARDATA};
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowExW, FindWindowW, IsWindowVisible, ShowWindow, SW_HIDE, SW_SHOWNA,
+    FindWindowExW, IsWindowVisible, ShowWindow, ShowWindowAsync, SW_HIDE, SW_SHOWNA,
 };
 
 const ABS_AUTOHIDE: u32 = 0x1;
@@ -34,8 +34,18 @@ pub fn default_marker_path() -> PathBuf {
     base.join(stem).join("taskbar-state.json")
 }
 
+/// Explorer's taskbar. Skips the stand-in window of the same class that tray.rs keeps
+/// (see notify.rs), which sits in front of it.
 pub fn primary_tray() -> Option<HWND> {
-    unsafe { FindWindowW(w!("Shell_TrayWnd"), PCWSTR::null()).ok() }.filter(|h| !h.is_invalid())
+    let me = std::process::id();
+    let mut prev: Option<HWND> = None;
+    loop {
+        let h = unsafe { FindWindowExW(None, prev, w!("Shell_TrayWnd"), PCWSTR::null()) }.ok().filter(|h| !h.is_invalid())?;
+        if crate::win::window_pid(h) != me {
+            return Some(h);
+        }
+        prev = Some(h);
+    }
 }
 
 pub fn tray_windows() -> Vec<HWND> {
@@ -85,12 +95,12 @@ pub fn hide(marker: &PathBuf) {
     reassert_hidden();
 }
 
-/// Hide any taskbar window that has become visible again.
+/// Hide any taskbar window that has become visible again. Doesn't wait on Explorer.
 pub fn reassert_hidden() {
     for h in tray_windows() {
         unsafe {
             if IsWindowVisible(h).as_bool() {
-                let _ = ShowWindow(h, SW_HIDE);
+                let _ = ShowWindowAsync(h, SW_HIDE);
             }
         }
     }

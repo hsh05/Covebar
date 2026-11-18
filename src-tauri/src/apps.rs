@@ -116,6 +116,9 @@ unsafe extern "system" fn win_event(
     if id_object != OBJID_WINDOW.0 || id_child != CHILDID_SELF as i32 {
         return;
     }
+    if event == EVENT_OBJECT_SHOW && matches!(win::class_name(h).as_str(), "Shell_TrayWnd" | "Shell_SecondaryTrayWnd") {
+        crate::dock::tray_shown();
+    }
     if event == EVENT_SYSTEM_FOREGROUND {
         note_foreground(h);
         let shell = win::is_shell_ui(h);
