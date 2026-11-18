@@ -1,0 +1,247 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" width="1200" height="470" role="img" aria-label="Animated preview of the Covebar dock: the bar slides up, a timer card counts down, the calendar opens from the clock, a right-click menu appears, then the bar slides away.">
+<title>Covebar in action</title>
+<style>
+text { font-family: Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, sans-serif; fill: #e8edf2; }
+.dim { fill: #93a0ad; }
+.ico { fill: none; stroke: #dfe6ec; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.card { fill: #1b2127; stroke: rgba(255,255,255,.09); }
+.pop { transform-box: fill-box; transform-origin: 50% 100%; opacity: 0; }
+.bar { animation: bar 12s cubic-bezier(.32,.72,0,1) infinite; }
+@keyframes bar { 0%,5% { transform: translateY(78px); } 11%,90% { transform: translateY(0); } 97%,100% { transform: translateY(78px); } }
+@keyframes timerCard { 0%,15.5% { opacity:0; transform: translateY(12px) scale(.94); } 18.5%,40% { opacity:1; transform: none; } 43%,100% { opacity:0; transform: translateY(8px) scale(.97); } }
+@keyframes calCard { 0%,48.5% { opacity:0; transform: translateY(12px) scale(.94); } 51.5%,67% { opacity:1; transform: none; } 70%,100% { opacity:0; transform: translateY(8px) scale(.97); } }
+@keyframes menu { 0%,73.5% { opacity:0; transform: translateY(8px) scale(.96); } 75.5%,86% { opacity:1; transform: none; } 88%,100% { opacity:0; transform: scale(.98); } }
+@keyframes cursor {
+  0% { transform: translate(640px, 300px); }
+  6% { transform: translate(640px, 462px); }
+  10% { transform: translate(640px, 440px); }
+  14%,42% { transform: translate(592px, 418px); }
+  47%,68% { transform: translate(985px, 418px); }
+  72%,87% { transform: translate(880px, 418px); }
+  89% { transform: translate(902px, 330px); }
+  95%,100% { transform: translate(760px, 250px); }
+}
+@keyframes ring { 0%,18.5% { stroke-dashoffset: 0; } 40%,100% { stroke-dashoffset: 402; } }
+@keyframes hlTimer { 0%,13% { opacity:0; } 14%,42% { opacity:1; } 44%,100% { opacity:0; } }
+@keyframes hlClock { 0%,46% { opacity:0; } 47%,68% { opacity:1; } 70%,100% { opacity:0; } }
+@keyframes hlSun { 0%,71% { opacity:0; } 72%,87% { opacity:1; } 89%,100% { opacity:0; } }
+@keyframes eq { 0%,100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+@keyframes d5 { 0%,22.79% { opacity:1; } 22.80%,100% { opacity:0; } }
+@keyframes d4 { 0%,22.79% { opacity:0; } 22.80%,27.09% { opacity:1; } 27.10%,100% { opacity:0; } }
+@keyframes d3 { 0%,27.09% { opacity:0; } 27.10%,31.39% { opacity:1; } 31.40%,100% { opacity:0; } }
+@keyframes d2 { 0%,31.39% { opacity:0; } 31.40%,35.69% { opacity:1; } 35.70%,100% { opacity:0; } }
+@keyframes d1 { 0%,35.69% { opacity:0; } 35.70%,39.99% { opacity:1; } 40.00%,100% { opacity:0; } }
+@keyframes c0 { 0%,14.5% { opacity:0; transform: scale(.3); } 14.7% { opacity:.8; transform: scale(.3); } 17.5%,100% { opacity:0; transform: scale(1.7); } }
+@keyframes c1 { 0%,47.5% { opacity:0; transform: scale(.3); } 47.7% { opacity:.8; transform: scale(.3); } 50.5%,100% { opacity:0; transform: scale(1.7); } }
+@keyframes c2 { 0%,72.5% { opacity:0; transform: scale(.3); } 72.7% { opacity:.8; transform: scale(.3); } 75.5%,100% { opacity:0; transform: scale(1.7); } }
+@media (prefers-reduced-motion: reduce) { * { animation-play-state: paused; } }
+</style>
+<defs>
+<radialGradient id="sky" cx="50%" cy="115%" r="95%"><stop offset="0" stop-color="#3a2a4f"/><stop offset=".45" stop-color="#1a1d2e"/><stop offset="1" stop-color="#0d1017"/></radialGradient>
+<linearGradient id="art" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff8a5c"/><stop offset="1" stop-color="#7b5cff"/></linearGradient>
+<linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#232a31" stop-opacity=".95"/><stop offset="1" stop-color="#1a1f25" stop-opacity=".95"/></linearGradient>
+<filter id="shadow" x="-20%" y="-30%" width="140%" height="170%"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity=".45"/></filter>
+<clipPath id="frame"><rect width="1200" height="470" rx="18"/></clipPath>
+</defs>
+<g clip-path="url(#frame)">
+<rect width="1200" height="470" fill="url(#sky)"/>
+<circle cx="389" cy="60" r="0.6" fill="#fff" opacity="0.18"/>
+<circle cx="643" cy="146" r="0.6" fill="#fff" opacity="0.56"/>
+<circle cx="258" cy="34" r="1.3" fill="#fff" opacity="0.18"/>
+<circle cx="109" cy="170" r="0.6" fill="#fff" opacity="0.58"/>
+<circle cx="757" cy="233" r="0.6" fill="#fff" opacity="0.41"/>
+<circle cx="476" cy="391" r="0.6" fill="#fff" opacity="0.40"/>
+<circle cx="160" cy="168" r="0.6" fill="#fff" opacity="0.41"/>
+<circle cx="672" cy="273" r="0.6" fill="#fff" opacity="0.41"/>
+<circle cx="767" cy="149" r="0.6" fill="#fff" opacity="0.40"/>
+<circle cx="743" cy="199" r="1.3" fill="#fff" opacity="0.50"/>
+<circle cx="559" cy="369" r="1" fill="#fff" opacity="0.28"/>
+<circle cx="953" cy="280" r="0.8" fill="#fff" opacity="0.19"/>
+<circle cx="360" cy="198" r="1" fill="#fff" opacity="0.48"/>
+<circle cx="346" cy="392" r="0.6" fill="#fff" opacity="0.38"/>
+<circle cx="198" cy="137" r="1.3" fill="#fff" opacity="0.34"/>
+<circle cx="1154" cy="31" r="1" fill="#fff" opacity="0.30"/>
+<circle cx="420" cy="199" r="1.3" fill="#fff" opacity="0.18"/>
+<circle cx="112" cy="108" r="0.6" fill="#fff" opacity="0.18"/>
+<circle cx="842" cy="259" r="1.3" fill="#fff" opacity="0.28"/>
+<circle cx="463" cy="267" r="0.6" fill="#fff" opacity="0.57"/>
+<circle cx="427" cy="244" r="1.3" fill="#fff" opacity="0.18"/>
+<circle cx="922" cy="52" r="0.8" fill="#fff" opacity="0.33"/>
+<circle cx="1100" cy="199" r="0.8" fill="#fff" opacity="0.35"/>
+<circle cx="659" cy="353" r="1.3" fill="#fff" opacity="0.54"/>
+<circle cx="334" cy="166" r="1" fill="#fff" opacity="0.46"/>
+<circle cx="457" cy="92" r="0.6" fill="#fff" opacity="0.23"/>
+<circle cx="278" cy="93" r="1.3" fill="#fff" opacity="0.52"/>
+<circle cx="219" cy="113" r="0.8" fill="#fff" opacity="0.34"/>
+<circle cx="443" cy="227" r="0.8" fill="#fff" opacity="0.46"/>
+<circle cx="619" cy="247" r="0.6" fill="#fff" opacity="0.36"/>
+<circle cx="1045" cy="381" r="1.3" fill="#fff" opacity="0.33"/>
+<circle cx="473" cy="193" r="1.3" fill="#fff" opacity="0.18"/>
+<circle cx="81" cy="84" r="0.8" fill="#fff" opacity="0.20"/>
+<circle cx="721" cy="41" r="0.8" fill="#fff" opacity="0.39"/>
+<circle cx="1139" cy="245" r="0.6" fill="#fff" opacity="0.54"/>
+<circle cx="737" cy="59" r="1" fill="#fff" opacity="0.58"/>
+<circle cx="723" cy="190" r="0.6" fill="#fff" opacity="0.53"/>
+<circle cx="1192" cy="186" r="1.3" fill="#fff" opacity="0.29"/>
+<circle cx="173" cy="300" r="1" fill="#fff" opacity="0.37"/>
+<circle cx="830" cy="207" r="0.8" fill="#fff" opacity="0.58"/>
+<circle cx="634" cy="59" r="0.6" fill="#fff" opacity="0.49"/>
+<circle cx="358" cy="257" r="0.6" fill="#fff" opacity="0.46"/>
+<circle cx="313" cy="147" r="0.8" fill="#fff" opacity="0.31"/>
+<circle cx="267" cy="217" r="1" fill="#fff" opacity="0.44"/>
+<circle cx="736" cy="315" r="0.8" fill="#fff" opacity="0.51"/>
+<circle cx="982" cy="296" r="0.8" fill="#fff" opacity="0.24"/>
+<circle cx="591" cy="292" r="0.6" fill="#fff" opacity="0.51"/>
+<circle cx="567" cy="77" r="1" fill="#fff" opacity="0.35"/>
+<circle cx="1124" cy="395" r="1" fill="#fff" opacity="0.19"/>
+<circle cx="123" cy="188" r="1" fill="#fff" opacity="0.24"/>
+<circle cx="749" cy="360" r="0.6" fill="#fff" opacity="0.37"/>
+<circle cx="784" cy="320" r="0.6" fill="#fff" opacity="0.53"/>
+<circle cx="144" cy="155" r="0.8" fill="#fff" opacity="0.37"/>
+<circle cx="214" cy="316" r="1" fill="#fff" opacity="0.19"/>
+<circle cx="1135" cy="289" r="1.3" fill="#fff" opacity="0.33"/>
+<circle cx="1136" cy="290" r="0.8" fill="#fff" opacity="0.60"/>
+<circle cx="33" cy="236" r="1.3" fill="#fff" opacity="0.51"/>
+<circle cx="175" cy="331" r="1.3" fill="#fff" opacity="0.45"/>
+<circle cx="420" cy="219" r="0.8" fill="#fff" opacity="0.16"/>
+<circle cx="959" cy="291" r="0.6" fill="#fff" opacity="0.39"/>
+<circle cx="1120" cy="174" r="0.8" fill="#fff" opacity="0.52"/>
+<circle cx="253" cy="101" r="1" fill="#fff" opacity="0.38"/>
+<circle cx="916" cy="130" r="1.3" fill="#fff" opacity="0.53"/>
+<circle cx="73" cy="296" r="1.3" fill="#fff" opacity="0.45"/>
+<circle cx="978" cy="207" r="0.8" fill="#fff" opacity="0.39"/>
+<circle cx="628" cy="7" r="1.3" fill="#fff" opacity="0.50"/>
+<circle cx="730" cy="310" r="0.8" fill="#fff" opacity="0.23"/>
+<circle cx="568" cy="290" r="0.6" fill="#fff" opacity="0.30"/>
+<circle cx="622" cy="222" r="0.6" fill="#fff" opacity="0.55"/>
+<circle cx="68" cy="77" r="0.6" fill="#fff" opacity="0.50"/>
+<g class="pop" style="animation: timerCard 12s ease infinite">
+<rect class="card" x="462" y="112" width="260" height="266" rx="16" filter="url(#shadow)"/>
+<rect x="476" y="126" width="232" height="30" rx="9" fill="#262e36"/>
+<rect x="479" y="129" width="113" height="24" rx="7" fill="#323c46"/>
+<text x="536" y="146" font-size="12" font-weight="600" text-anchor="middle">Timer</text>
+<text x="648" y="146" font-size="12" class="dim" text-anchor="middle">Stopwatch</text>
+<circle cx="592" cy="240" r="64" fill="none" stroke="#2b343d" stroke-width="8"/>
+<circle cx="592" cy="240" r="64" fill="none" stroke="#5fd4b8" stroke-width="8" stroke-linecap="round" stroke-dasharray="402" transform="rotate(-90 592 240)" style="animation: ring 12s linear infinite"/>
+<text x="592" y="250" font-size="34" font-weight="600" text-anchor="middle" opacity="0" style="animation: d5 12s step-end infinite">0:05</text>
+<text x="592" y="250" font-size="34" font-weight="600" text-anchor="middle" opacity="0" style="animation: d4 12s step-end infinite">0:04</text>
+<text x="592" y="250" font-size="34" font-weight="600" text-anchor="middle" opacity="0" style="animation: d3 12s step-end infinite">0:03</text>
+<text x="592" y="250" font-size="34" font-weight="600" text-anchor="middle" opacity="0" style="animation: d2 12s step-end infinite">0:02</text>
+<text x="592" y="250" font-size="34" font-weight="600" text-anchor="middle" opacity="0" style="animation: d1 12s step-end infinite">0:01</text>
+<text x="592" y="274" font-size="11" class="dim" text-anchor="middle">of 5 sec</text>
+<rect x="486" y="330" width="64" height="26" rx="13" fill="#262e36"/><text x="518" y="347" font-size="11" text-anchor="middle">1 min</text>
+<rect x="560" y="330" width="64" height="26" rx="13" fill="#262e36"/><text x="592" y="347" font-size="11" text-anchor="middle">5 min</text>
+<rect x="634" y="330" width="64" height="26" rx="13" fill="#262e36"/><text x="666" y="347" font-size="11" text-anchor="middle">25 min</text>
+</g>
+<g class="pop" style="animation: calCard 12s ease infinite">
+<rect class="card" x="858" y="116" width="250" height="262" rx="16" filter="url(#shadow)"/>
+<text x="878" y="146" font-size="15" font-weight="600">November 2026</text>
+<text x="878" y="164" font-size="11" class="dim">Wednesday, 18 November</text>
+<text x="889.0" y="192" font-size="10" class="dim" text-anchor="middle">M</text>
+<text x="920.5" y="192" font-size="10" class="dim" text-anchor="middle">T</text>
+<text x="952.0" y="192" font-size="10" class="dim" text-anchor="middle">W</text>
+<text x="983.5" y="192" font-size="10" class="dim" text-anchor="middle">T</text>
+<text x="1015.0" y="192" font-size="10" class="dim" text-anchor="middle">F</text>
+<text x="1046.5" y="192" font-size="10" class="dim" text-anchor="middle">S</text>
+<text x="1078.0" y="192" font-size="10" class="dim" text-anchor="middle">S</text>
+<text x="1078.0" y="214" font-size="11" text-anchor="middle">1</text>
+<text x="889.0" y="241" font-size="11" text-anchor="middle">2</text>
+<text x="920.5" y="241" font-size="11" text-anchor="middle">3</text>
+<text x="952.0" y="241" font-size="11" text-anchor="middle">4</text>
+<text x="983.5" y="241" font-size="11" text-anchor="middle">5</text>
+<text x="1015.0" y="241" font-size="11" text-anchor="middle">6</text>
+<text x="1046.5" y="241" font-size="11" text-anchor="middle">7</text>
+<text x="1078.0" y="241" font-size="11" text-anchor="middle">8</text>
+<text x="889.0" y="268" font-size="11" text-anchor="middle">9</text>
+<text x="920.5" y="268" font-size="11" text-anchor="middle">10</text>
+<text x="952.0" y="268" font-size="11" text-anchor="middle">11</text>
+<text x="983.5" y="268" font-size="11" text-anchor="middle">12</text>
+<text x="1015.0" y="268" font-size="11" text-anchor="middle">13</text>
+<text x="1046.5" y="268" font-size="11" text-anchor="middle">14</text>
+<text x="1078.0" y="268" font-size="11" text-anchor="middle">15</text>
+<text x="889.0" y="295" font-size="11" text-anchor="middle">16</text>
+<text x="920.5" y="295" font-size="11" text-anchor="middle">17</text>
+<circle cx="952.0" cy="291" r="12" fill="#5fd4b8"/><text x="952.0" y="295" font-size="11" font-weight="700" text-anchor="middle" style="fill:#0f1a17">18</text>
+<text x="983.5" y="295" font-size="11" text-anchor="middle">19</text>
+<text x="1015.0" y="295" font-size="11" text-anchor="middle">20</text>
+<text x="1046.5" y="295" font-size="11" text-anchor="middle">21</text>
+<text x="1078.0" y="295" font-size="11" text-anchor="middle">22</text>
+<text x="889.0" y="322" font-size="11" text-anchor="middle">23</text>
+<text x="920.5" y="322" font-size="11" text-anchor="middle">24</text>
+<text x="952.0" y="322" font-size="11" text-anchor="middle">25</text>
+<text x="983.5" y="322" font-size="11" text-anchor="middle">26</text>
+<text x="1015.0" y="322" font-size="11" text-anchor="middle">27</text>
+<text x="1046.5" y="322" font-size="11" text-anchor="middle">28</text>
+<text x="1078.0" y="322" font-size="11" text-anchor="middle">29</text>
+<text x="889.0" y="349" font-size="11" text-anchor="middle">30</text>
+</g>
+<g class="pop" style="animation: menu 12s ease infinite">
+<rect class="card" x="800" y="120" width="232" height="258" rx="12" filter="url(#shadow)"/>
+<circle class="ico" cx="822" cy="142" r="3"/><path class="ico" d="M822 135v1.5M822 147.5v1.5M815 142h1.5M827.5 142h1.5"/>
+<text x="840" y="146.5" font-size="12.5">100%</text>
+<path class="ico" d="M817 174l3.5 3.5 6.5-7" style="stroke:#5fd4b8"/>
+<text x="840" y="178.5" font-size="12.5">75%</text>
+<circle class="ico" cx="822" cy="206" r="3"/><path class="ico" d="M822 199v1.5M822 211.5v1.5M815 206h1.5M827.5 206h1.5"/>
+<text x="840" y="210.5" font-size="12.5">50%</text>
+<circle class="ico" cx="822" cy="238" r="3"/><path class="ico" d="M822 231v1.5M822 243.5v1.5M815 238h1.5M827.5 238h1.5"/>
+<text x="840" y="242.5" font-size="12.5">25%</text>
+<line x1="812" x2="1020" y1="260" y2="260" stroke="rgba(255,255,255,.08)"/>
+<circle class="ico" cx="822" cy="280" r="5.5"/><circle class="ico" cx="822" cy="280" r="1.8"/>
+<text x="840" y="284.5" font-size="12.5">Display settings</text>
+<line x1="812" x2="1020" y1="302" y2="302" stroke="rgba(255,255,255,.08)"/>
+<rect x="806" y="307" width="220" height="30" rx="8" fill="#2a333c"/>
+<path class="ico" d="M815 322s2.6-4.5 7-4.5 7 4.5 7 4.5-2.6 4.5-7 4.5-7-4.5-7-4.5z"/><circle class="ico" cx="822" cy="322" r="1.8"/><path class="ico" d="M816 328l12-12"/>
+<text x="840" y="326.5" font-size="12.5">Hide brightness from the bar</text>
+<circle class="ico" cx="822" cy="354" r="5.5"/><circle class="ico" cx="822" cy="354" r="1.8"/>
+<text x="840" y="358.5" font-size="12.5">Customize widgets…</text>
+</g>
+<g class="bar">
+<rect x="165" y="392" width="870" height="56" rx="28.0" fill="url(#barFill)" stroke="rgba(255,255,255,.08)" filter="url(#shadow)"/>
+<rect x="572.0" y="400.0" width="40" height="40" rx="11" fill="rgba(255,255,255,.1)" opacity="0" style="animation: hlTimer 12s ease infinite"/>
+<rect x="944.0" y="400.0" width="82" height="40" rx="11" fill="rgba(255,255,255,.1)" opacity="0" style="animation: hlClock 12s ease infinite"/>
+<rect x="860.0" y="400.0" width="40" height="40" rx="11" fill="rgba(255,255,255,.1)" opacity="0" style="animation: hlSun 12s ease infinite"/>
+<rect x="192" y="412.0" width="7.5" height="7.5" rx="1.2" fill="#4cc2ff"/>
+<rect x="200.5" y="412.0" width="7.5" height="7.5" rx="1.2" fill="#4cc2ff"/>
+<rect x="192" y="420.5" width="7.5" height="7.5" rx="1.2" fill="#4cc2ff"/>
+<rect x="200.5" y="420.5" width="7.5" height="7.5" rx="1.2" fill="#4cc2ff"/>
+<rect x="233" y="406.0" width="26" height="26" rx="7" fill="#ff7a45"/><circle cx="246" cy="419.0" r="6" fill="#ffd166" opacity=".9"/>
+<rect x="239.0" y="437.0" width="14" height="3" rx="1.5" fill="#5fd4b8"/>
+<rect x="277" y="406.0" width="26" height="26" rx="7" fill="#4f8cff"/><circle cx="290" cy="419.0" r="6" fill="#8fd3ff" opacity=".9"/>
+<rect x="287.0" y="437.0" width="6" height="3" rx="1.5" fill="#8a96a3"/>
+<rect x="321" y="406.0" width="26" height="26" rx="7" fill="#9b6bff"/><circle cx="334" cy="419.0" r="6" fill="#d6b8ff" opacity=".9"/>
+<line x1="368" x2="368" y1="406.0" y2="434.0" stroke="rgba(255,255,255,.1)"/>
+<rect x="382" y="405.0" width="30" height="30" rx="6" fill="url(#art)"/>
+<text x="422" y="418.0" font-size="12" font-weight="600">Night Drive</text>
+<text x="422" y="433.0" font-size="11" class="dim">Lumen Waves</text>
+<rect x="504" y="413.0" width="3" height="14" rx="1.5" fill="#5fd4b8" style="transform-box: fill-box; transform-origin: 50% 100%; animation: eq 0.80s ease-in-out 0.00s infinite"/>
+<rect x="509" y="413.0" width="3" height="14" rx="1.5" fill="#5fd4b8" style="transform-box: fill-box; transform-origin: 50% 100%; animation: eq 0.97s ease-in-out 0.12s infinite"/>
+<rect x="514" y="413.0" width="3" height="14" rx="1.5" fill="#5fd4b8" style="transform-box: fill-box; transform-origin: 50% 100%; animation: eq 1.14s ease-in-out 0.24s infinite"/>
+<path d="M532 414.0v12l9-6z" fill="#dfe6ec"/>
+<path class="ico" d="M586 412.0h12M586 428.0h12M587 412.0c0 5 10 5 10 8s-10 3-10 8M597 412.0c0 5-10 5-10 8s10 3 10 8"/>
+<ellipse class="ico" cx="640" cy="415.0" rx="7" ry="3"/><path class="ico" d="M633 415.0v9c0 1.7 3.1 3 7 3s7-1.3 7-3v-9M633 420.0c0 1.7 3.1 3 7 3s7-1.3 7-3"/>
+<circle cx="684" cy="420.0" r="8" fill="none" stroke="#2f3943" stroke-width="2.6"/>
+<circle cx="684" cy="420.0" r="8" fill="none" stroke="#5fd4b8" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="23.1 100" transform="rotate(-90 684 420.0)"/>
+<text x="698" y="424.0" font-size="11.5">46%</text>
+<path class="ico" d="M750 423.0V412.0a2 2 0 0 1 4 0V423.0a4.5 4.5 0 1 1-4 0z"/>
+<text x="762" y="424.0" font-size="11.5">38°</text>
+<path class="ico" d="M826 417.0h3l5-4v14l-5-4h-3zM838 416.0a5 5 0 0 1 0 8"/>
+<circle class="ico" cx="880" cy="420.0" r="4"/>
+<line class="ico" x1="887.0" y1="420.0" x2="889.5" y2="420.0"/>
+<line class="ico" x1="884.9" y1="424.9" x2="886.7" y2="426.7"/>
+<line class="ico" x1="880.0" y1="427.0" x2="880.0" y2="429.5"/>
+<line class="ico" x1="875.1" y1="424.9" x2="873.3" y2="426.7"/>
+<line class="ico" x1="873.0" y1="420.0" x2="870.5" y2="420.0"/>
+<line class="ico" x1="875.1" y1="415.1" x2="873.3" y2="413.3"/>
+<line class="ico" x1="880.0" y1="413.0" x2="880.0" y2="410.5"/>
+<line class="ico" x1="884.9" y1="415.1" x2="886.7" y2="413.3"/>
+<path class="ico" d="M919 415.0h14M923 415.0v-2.5h6V415.0M920.5 415.0l1 12h9l1-12"/>
+<text x="1015" y="419.0" font-size="14" font-weight="600" text-anchor="end">17:49</text>
+<text x="1015" y="434.0" font-size="10.5" class="dim" text-anchor="end">Wed, 18 Nov</text>
+</g>
+<g style="animation: cursor 12s cubic-bezier(.45,.05,.3,1) infinite">
+<circle cx="0" cy="0" r="14" fill="none" stroke="#fff" stroke-width="2" opacity="0" style="transform-box: fill-box; transform-origin: center; animation: c0 12s linear infinite"/>
+<circle cx="0" cy="0" r="14" fill="none" stroke="#fff" stroke-width="2" opacity="0" style="transform-box: fill-box; transform-origin: center; animation: c1 12s linear infinite"/>
+<circle cx="0" cy="0" r="14" fill="none" stroke="#fff" stroke-width="2" opacity="0" style="transform-box: fill-box; transform-origin: center; animation: c2 12s linear infinite"/>
+<path d="M0 0v17l4.2-4 2.8 6.4 2.6-1.1-2.8-6.3H12.6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/>
+</g>
+</g></svg>
