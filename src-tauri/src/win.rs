@@ -105,6 +105,13 @@ pub fn show_no_activate(h: HWND) {
     }
 }
 
+/// Put a topmost window back in front of other topmost windows (a no-op when it already is).
+pub fn raise_topmost(h: HWND) {
+    unsafe {
+        let _ = SetWindowPos(h, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    }
+}
+
 pub fn primary_monitor() -> HMONITOR {
     unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) }
 }

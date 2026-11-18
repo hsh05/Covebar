@@ -139,9 +139,14 @@ pub fn show_osd(app: &AppHandle, kind: &str, on: bool) {
     let app = app.clone();
     let hw = win::hval(h);
     std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(1300));
-        if OSD_SESSION.load(Ordering::SeqCst) != me {
-            return;
+        // Fullscreen games and players keep putting their own window on top: stay above them
+        // for as long as the indicator shows.
+        for _ in 0..26 {
+            std::thread::sleep(Duration::from_millis(50));
+            if OSD_SESSION.load(Ordering::SeqCst) != me {
+                return;
+            }
+            win::raise_topmost(win::hwnd(hw));
         }
         let _ = app.emit_to("osd", "osd-out", me);
         std::thread::sleep(Duration::from_millis(260));
