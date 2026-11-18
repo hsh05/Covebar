@@ -6,8 +6,6 @@ A dock and taskbar for Windows 10 and 11, with your apps, your music and small w
 
 <img src="docs/showcase.svg" alt="Animation of Covebar: the bar slides up, a timer card counts down, the calendar opens from the clock, a right-click menu appears, then the bar slides away" width="100%">
 
-<sub>An illustration of the bar, not a screen recording.</sub>
-
 </div>
 
 ## What it does
