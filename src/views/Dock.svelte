@@ -20,6 +20,53 @@
     invoke("show_alarm", { anchorX: r?.left ?? null, anchorWidth: r?.width ?? null });
   });
 
+  // ---- keyboard: the "focus the bar" shortcut puts focus on the first tile. The arrow keys
+  // move between tiles, Enter or Space opens one, the Menu key (or Shift+F10) shows its menu
+  // and Esc goes back to the window you were in.
+  function tiles(): HTMLElement[] {
+    if (!rowEl) return [];
+    return [...rowEl.querySelectorAll<HTMLElement>("button:not([disabled]), [tabindex='0']")].filter(
+      (el) => el.getClientRects().length > 0,
+    );
+  }
+  function focusTile(el: HTMLElement | undefined) {
+    // Show the focus ring even though the shortcut was pressed outside this window.
+    el?.focus({ focusVisible: true } as FocusOptions);
+  }
+  listen("dock-focus", async () => {
+    await tick();
+    focusTile(tiles()[0]);
+  });
+  function onkey(e: KeyboardEvent) {
+    const list = tiles();
+    const at = list.indexOf(document.activeElement as HTMLElement);
+    let to: number;
+    if (e.key === "ArrowRight") to = at < 0 ? 0 : Math.min(list.length - 1, at + 1);
+    else if (e.key === "ArrowLeft") to = at < 0 ? 0 : Math.max(0, at - 1);
+    else if (e.key === "Home") to = 0;
+    else if (e.key === "End") to = list.length - 1;
+    else if (e.key === "Escape") {
+      e.preventDefault();
+      (document.activeElement as HTMLElement | null)?.blur();
+      invoke("leave_bar", { restore: true });
+      return;
+    } else if ((e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) && at >= 0) {
+      e.preventDefault();
+      const r = list[at].getBoundingClientRect();
+      list[at].dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX: r.left + r.width / 2,
+          clientY: r.top + r.height / 2,
+        }),
+      );
+      return;
+    } else return;
+    e.preventDefault();
+    focusTile(list[to]);
+  }
+
   const shownIds = $derived((store.s?.widgets ?? []).filter((w) => w.enabled && WIDGETS[w.id]).map((w) => w.id));
   const edge = $derived<Edge>(store.s?.edge ?? "bottom");
   const centered = $derived((store.s?.align ?? "center") === "center");
@@ -255,6 +302,8 @@
     ]);
   }
 </script>
+
+<svelte:window onkeydown={onkey} onblur={() => invoke("leave_bar", { restore: false })} />
 
 <main
   bind:this={barEl}

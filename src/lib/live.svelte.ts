@@ -45,6 +45,7 @@ export const timers = live<TimersState>("get_timers", "timers-changed", {
 export const hotkeyStatus = live<HotkeyStatus>("get_hotkey_status", "hotkeys-status", {
   micMute: "off",
   speakerMute: "off",
+  focusBar: "off",
 });
 
 export const tray = live<TrayState>("get_tray", "tray-changed", { icons: [], hasOverflow: false, unavailable: false });

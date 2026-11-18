@@ -100,11 +100,20 @@ pub struct Settings {
 pub struct Hotkeys {
     pub mic_mute: String,
     pub speaker_mute: String,
+    /// Move keyboard focus to the bar.
+    pub focus_bar: String,
+    /// Win+1 … Win+9 open the apps on the bar.
+    pub win_numbers: bool,
 }
 
 impl Default for Hotkeys {
     fn default() -> Self {
-        Self { mic_mute: "Win+Alt+M".into(), speaker_mute: "Win+Alt+S".into() }
+        Self {
+            mic_mute: "Win+Alt+M".into(),
+            speaker_mute: "Win+Alt+S".into(),
+            focus_bar: "Win+Alt+Q".into(),
+            win_numbers: true,
+        }
     }
 }
 

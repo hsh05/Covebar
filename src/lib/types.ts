@@ -65,12 +65,17 @@ export interface PreviewData {
 export interface Hotkeys {
   micMute: string;
   speakerMute: string;
+  focusBar: string;
+  /** Win+1 … Win+9 open the apps on the bar. */
+  winNumbers: boolean;
 }
+export type ShortcutName = "micMute" | "speakerMute" | "focusBar";
 
 export type HotkeyState = "ok" | "off" | "invalid" | "taken";
 export interface HotkeyStatus {
   micMute: HotkeyState;
   speakerMute: HotkeyState;
+  focusBar: HotkeyState;
 }
 
 export interface MediaInfo {

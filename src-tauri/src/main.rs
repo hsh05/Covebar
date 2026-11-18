@@ -22,6 +22,7 @@ mod autohide;
 mod brightness;
 mod dock;
 mod hotkeys;
+mod winkeys;
 mod icons;
 mod popups;
 mod recycle;
@@ -81,6 +82,7 @@ fn set_settings(app: AppHandle, state: State<AppState>, mut settings: Settings) 
         dock::set_taskbar_hidden(&app, settings.hide_taskbar);
         dock::place(&app);
     }
+    winkeys::set_enabled(settings.hotkeys.win_numbers && settings.has_widget("apps"));
     if old.hotkeys != settings.hotkeys {
         hotkeys::update(settings.hotkeys.clone());
     }
@@ -310,6 +312,11 @@ fn show_alarm(app: AppHandle, anchor_x: Option<f64>, anchor_width: Option<f64>) 
 }
 
 #[tauri::command]
+fn leave_bar(restore: bool) {
+    dock::leave_bar(restore);
+}
+
+#[tauri::command]
 fn show_tour(app: AppHandle) {
     popups::show_tour(&app);
 }
@@ -468,6 +475,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     recycle::start(handle.clone());
     timers::start(handle.clone(), config_dir.join("timers.json"));
     hotkeys::start(handle.clone(), settings.hotkeys.clone());
+    winkeys::start(settings.hotkeys.win_numbers && settings.has_widget("apps"));
     tray::start(handle.clone());
     temps::start(handle.clone());
     currency::start(handle.clone(), config_dir.join("currency.json"));
@@ -577,6 +585,7 @@ fn main() {
             show_alarm,
             open_log_folder,
             show_tour,
+            leave_bar,
             hide_tour,
             get_hotkey_status,
             pause_hotkeys,

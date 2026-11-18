@@ -16,6 +16,30 @@ use windows::Win32::UI::WindowsAndMessaging::{
 const WINDOWS: [&str; 5] = ["dock", "card", "preview", "menu", "settings"];
 
 /// Reserve space with the AppBar and move the dock into it.
+/// The bar has keyboard focus from the "focus the bar" shortcut: auto-hide keeps it up.
+pub static KEYBOARD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Give the bar keyboard focus so its tiles can be reached with the arrow keys.
+pub fn focus_bar(app: &AppHandle) {
+    let Some(w) = app.get_webview_window("dock") else { return };
+    let Some(h) = win::tauri_hwnd(&w) else { return };
+    popups::close_card(app, None);
+    popups::close_menu(app);
+    KEYBOARD.store(true, Ordering::SeqCst);
+    crate::apps::activate(h);
+    let _ = w.set_focus();
+    let _ = tauri::Emitter::emit_to(app, "dock", "dock-focus", ());
+}
+
+/// The bar lost keyboard focus; with `restore`, go back to the window that had it before.
+pub fn leave_bar(restore: bool) {
+    KEYBOARD.store(false, Ordering::SeqCst);
+    let fg = crate::apps::last_foreground();
+    if restore && fg != 0 {
+        crate::apps::activate(win::hwnd(fg));
+    }
+}
+
 pub fn place(app: &AppHandle) {
     let st = app.state::<AppState>();
     let s = st.settings.lock().unwrap().clone();

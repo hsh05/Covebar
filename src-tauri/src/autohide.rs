@@ -101,7 +101,8 @@ fn popups_open(app: &AppHandle) -> bool {
             .map(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false))
             .unwrap_or(false)
     };
-    ["card", "menu", "preview", "settings", "alarm", "tour"].into_iter().any(shown)
+    crate::dock::KEYBOARD.load(Ordering::SeqCst)
+        || ["card", "menu", "preview", "settings", "alarm", "tour"].into_iter().any(shown)
 }
 
 pub fn start(app: AppHandle) {

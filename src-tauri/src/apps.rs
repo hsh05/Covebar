@@ -606,6 +606,27 @@ pub fn click_app(hwnds: &[isize]) {
     activate(hwnd(target));
 }
 
+/// Win+number: the nth app on the bar (pins first, then running apps), opened the way a
+/// click on it would, or started when it has no window.
+pub fn open_nth(i: usize) {
+    let snap = current();
+    let Some(app) = snap.apps.get(i) else { return };
+    if app.windows.is_empty() {
+        if let Some(t) = &app.launch {
+            // The key press was ours, so let the new app come to the front.
+            unsafe {
+                let _ = windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(
+                    windows::Win32::UI::WindowsAndMessaging::ASFW_ANY,
+                );
+            }
+            launch(t);
+        }
+    } else {
+        let h: Vec<isize> = app.windows.iter().map(|w| w.hwnd).collect();
+        click_app(&h);
+    }
+}
+
 /// Bring the app playing media (by its media-session app id) to the front, most recently
 /// used window first; start it if it has no window.
 pub fn open_media_source(aumid: &str) {

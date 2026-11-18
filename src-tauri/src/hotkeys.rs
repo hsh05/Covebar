@@ -1,4 +1,5 @@
-//! Global shortcuts (mute mic / mute speakers) through RegisterHotKey on a dedicated thread.
+//! Global shortcuts (mute mic / mute speakers / focus the bar) through RegisterHotKey on a
+//! dedicated thread. Win+number is handled separately, in `winkeys`.
 
 use crate::settings::Hotkeys;
 use serde::Serialize;
@@ -15,7 +16,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_HOTKEY,
 };
 
-const ACTIONS: [&str; 2] = ["micMute", "speakerMute"];
+const ACTIONS: [&str; 3] = ["micMute", "speakerMute", "focusBar"];
 const WM_RELOAD: u32 = WM_APP + 1;
 
 /// Per action: "ok", "off" (no shortcut), "invalid" or "taken" (another app owns it).
@@ -24,6 +25,7 @@ const WM_RELOAD: u32 = WM_APP + 1;
 pub struct HotkeyStatus {
     pub mic_mute: String,
     pub speaker_mute: String,
+    pub focus_bar: String,
 }
 
 static THREAD: OnceLock<u32> = OnceLock::new();
@@ -46,6 +48,7 @@ pub fn start(app: AppHandle, keys: Hotkeys) {
                 WM_HOTKEY => match ACTIONS.get(msg.wParam.0) {
                     Some(&"micMute") => crate::audio::toggle_mute("input"),
                     Some(&"speakerMute") => crate::audio::toggle_mute("output"),
+                    Some(&"focusBar") => crate::dock::focus_bar(&app),
                     _ => {}
                 },
                 WM_RELOAD => apply(&app),
@@ -96,7 +99,7 @@ fn apply(app: &AppHandle) {
     }
     let keys = WANTED.lock().unwrap().clone().unwrap_or_default();
     let mut result = Vec::new();
-    for (i, combo) in [&keys.mic_mute, &keys.speaker_mute].into_iter().enumerate() {
+    for (i, combo) in [&keys.mic_mute, &keys.speaker_mute, &keys.focus_bar].into_iter().enumerate() {
         unsafe {
             let _ = UnregisterHotKey(None, i as i32);
         }
@@ -115,7 +118,11 @@ fn apply(app: &AppHandle) {
         };
         result.push(st.to_string());
     }
-    let st = HotkeyStatus { mic_mute: result[0].clone(), speaker_mute: result[1].clone() };
+    let st = HotkeyStatus {
+        mic_mute: result[0].clone(),
+        speaker_mute: result[1].clone(),
+        focus_bar: result[2].clone(),
+    };
     *STATUS.lock().unwrap() = Some(st.clone());
     let _ = app.emit("hotkeys-status", st);
 }

@@ -3,7 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { store, updateSettings } from "../lib/settings.svelte";
   import { WIDGETS } from "../lib/widgets";
-  import type { Hotkeys, Settings, WidgetEntry } from "../lib/types";
+  import type { Settings, ShortcutName, WidgetEntry } from "../lib/types";
   import { hotkeyStatus } from "../lib/live.svelte";
   import { presetLabel } from "../lib/format";
   import ShortcutRecorder from "./ShortcutRecorder.svelte";
@@ -61,8 +61,17 @@
 
   // ---- shortcuts and timer presets
   const keys = hotkeyStatus();
-  const DEFAULT_KEYS: Hotkeys = { micMute: "Win+Alt+M", speakerMute: "Win+Alt+S" };
-  function setKey(k: keyof Hotkeys, v: string) {
+  const DEFAULT_KEYS: Record<ShortcutName, string> = {
+    micMute: "Win+Alt+M",
+    speakerMute: "Win+Alt+S",
+    focusBar: "Win+Alt+Q",
+  };
+  const SHORTCUTS: [ShortcutName, string, string][] = [
+    ["micMute", "Mute microphone", "Turns your microphone on or off"],
+    ["speakerMute", "Mute speakers", "Turns the sound output on or off"],
+    ["focusBar", "Focus the bar", "Then use the arrow keys, Enter to open, the Menu key for options and Esc to leave"],
+  ];
+  function setKey(k: ShortcutName | "winNumbers", v: string | boolean) {
     set("hotkeys", { ...s.hotkeys, [k]: v });
   }
 
@@ -248,8 +257,7 @@
       {@render widgetList("hidden", hidden)}
     {:else if section === "Shortcuts"}
       <div class="group">
-        {#each [["micMute", "Mute microphone", "Turns your microphone on or off"], ["speakerMute", "Mute speakers", "Turns the sound output on or off"]] as [k, label, hint] (k)}
-          {@const key = k as keyof Hotkeys}
+        {#each SHORTCUTS as [key, label, hint] (key)}
           <div class="row">
             <span class="text"><span class="label">{label}</span><span class="hint">{hint}</span></span>
             <div>
@@ -262,6 +270,20 @@
             </div>
           </div>
         {/each}
+      </div>
+      <div class="group">
+        <label class="row">
+          <span class="text">
+            <span class="label">Win+1 to Win+9 open your apps</span>
+            <span class="hint">Like the Windows taskbar: Win+1 is the first app on the bar, Win+0 the tenth</span>
+          </span>
+          <input
+            type="checkbox"
+            class="switch"
+            checked={s.hotkeys.winNumbers}
+            onchange={(e) => setKey("winNumbers", e.currentTarget.checked)}
+          />
+        </label>
       </div>
       <p class="note">Shortcuts work everywhere, even while a game or another app is in front.</p>
     {:else if section === "Timer"}
