@@ -9,6 +9,7 @@
   import { showMenu, type MenuEntry } from "../../lib/menu";
   import { store } from "../../lib/settings.svelte";
   import { previewSize } from "../../lib/popups";
+  import { startMenuEntries } from "../../lib/startMenu";
   import type { AppsSnapshot, DockApp, PreviewData } from "../../lib/types";
   import AppIcon from "./AppIcon.svelte";
 
@@ -137,16 +138,7 @@
     e.preventDefault();
     e.stopPropagation();
     hidePreview();
-    const run = (target: string) => () => invoke("launch_app", { target });
-    await showMenu([
-      { label: "Installed apps", icon: "open", action: run("ms-settings:appsfeatures") },
-      { label: "Device Manager", icon: "sliders", action: run("devmgmt.msc") },
-      { label: "Disk Management", icon: "folder", action: run("diskmgmt.msc") },
-      { label: "Task Manager", icon: "activity", action: run("taskmgr.exe") },
-      { label: "Settings", icon: "settings", action: run("ms-settings:") },
-      { label: "File Explorer", icon: "folder", action: run("explorer.exe") },
-      { label: "Run", icon: "open", action: run("shell:::{2559a1f3-21d7-11d4-bdaf-00c04f60b9f0}") },
-    ]);
+    await showMenu(startMenuEntries());
   }
 
   const isActive = (app: DockApp) => app.windows.some((w) => w.hwnd === snap.active);
