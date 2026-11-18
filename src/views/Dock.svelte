@@ -334,6 +334,12 @@
   onpointerup={up}
   onpointercancel={up}
   oncontextmenu={menu}
+  oncontextmenucapture={(e) => {
+    // Shift+right-click anywhere, even on an app or widget, opens the bar's own menu.
+    if (!e.shiftKey) return;
+    e.stopPropagation();
+    menu(e);
+  }}
 >
   <div
     class="bg"
