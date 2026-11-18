@@ -160,7 +160,10 @@ fn renew_signin() -> bool {
     let started = Instant::now();
     loop {
         match child.try_wait() {
-            Ok(Some(status)) => return status.success(),
+            Ok(Some(status)) => {
+                crate::dlog!("claude usage: asked Claude Code to renew its sign-in ({status})");
+                return status.success();
+            }
             Ok(None) if started.elapsed() < Duration::from_secs(30) => std::thread::sleep(Duration::from_millis(200)),
             _ => {
                 let _ = child.kill();

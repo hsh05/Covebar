@@ -1,15 +1,18 @@
 // Prevents an extra console window on Windows in release.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-/// Debug-build logging to the console.
+/// Log a line to the log file (and, in debug builds, the console).
 #[macro_export]
 macro_rules! dlog {
     ($($t:tt)*) => {{
+        let line = format!($($t)*);
         #[cfg(debug_assertions)]
-        eprintln!("[covebar] {}", format!($($t)*));
+        eprintln!("[covebar] {line}");
+        $crate::log::write(&line);
     }};
 }
 
+mod log;
 mod apps;
 mod audio;
 mod media;
@@ -306,6 +309,13 @@ fn show_alarm(app: AppHandle, anchor_x: Option<f64>, anchor_width: Option<f64>) 
 }
 
 #[tauri::command]
+fn open_log_folder() {
+    if let Some(d) = log::dir() {
+        apps::launch(&d.to_string_lossy());
+    }
+}
+
+#[tauri::command]
 fn get_timers() -> timers::TimersState {
     timers::get()
 }
@@ -398,6 +408,7 @@ fn show_settings(app: &AppHandle) -> tauri::Result<()> {
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.handle().clone();
     let config_dir = app.path().app_config_dir()?;
+    log::init(&config_dir.join("logs"));
     let settings_path = config_dir.join("settings.json");
     let settings = settings::load(&settings_path);
     let marker_path = taskbar::default_marker_path();
@@ -544,6 +555,7 @@ fn main() {
             get_timers,
             timers_action,
             show_alarm,
+            open_log_folder,
             get_hotkey_status,
             pause_hotkeys,
             open_settings,

@@ -258,12 +258,19 @@
           If the Windows taskbar ever stays hidden, run <code>{appName.toLowerCase()}.exe --restore-taskbar</code>.
         </p>
       </div>
-      <button class="danger" onclick={() => invoke("quit")}>Quit {appName}</button>
+      <div class="about-actions">
+        <button onclick={() => invoke("open_log_folder")}>Open log folder</button>
+        <button class="danger" onclick={() => invoke("quit")}>Quit {appName}</button>
+      </div>
     {/if}
   </section>
 </div>
 
 <style>
+  .about-actions {
+    display: flex;
+    gap: 8px;
+  }
   .settings {
     display: flex;
     height: 100vh;
@@ -539,14 +546,17 @@
     padding: 1px 5px;
     border-radius: 4px;
   }
-  .danger {
+  .about-actions button {
     margin-top: 8px;
     padding: 8px 16px;
     border-radius: 6px;
     border: 1px solid var(--line);
-    color: var(--danger);
+    transition: background-color var(--t-fast) var(--ease-out);
   }
-  .danger:hover {
+  .about-actions button:hover {
     background: var(--hover);
+  }
+  .danger {
+    color: var(--danger);
   }
 </style>
