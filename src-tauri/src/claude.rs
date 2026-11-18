@@ -121,7 +121,60 @@ fn with_status(status: &str, message: &str, plan: Option<String>) -> Usage {
     Usage { status: status.into(), message: Some(message.into()), plan: plan.or(last.plan), ..last }
 }
 
+/// Claude Code renews its sign-in whenever it runs, but the desktop app keeps its own copy and
+/// leaves this file to expire. Run `claude auth status` (no prompt, no usage) quietly so the
+/// CLI renews the file itself; Covebar still only ever reads it. At most every 10 minutes.
+fn renew_signin() -> bool {
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+    static LAST: Mutex<Option<Instant>> = Mutex::new(None);
+    {
+        let mut last = LAST.lock().unwrap();
+        if last.is_some_and(|t| t.elapsed() < Duration::from_secs(10 * 60)) {
+            return false;
+        }
+        *last = Some(Instant::now());
+    }
+    let home = std::env::var_os("USERPROFILE").map(std::path::PathBuf::from).unwrap_or_default();
+    let native = home.join(".local").join("bin").join("claude.exe");
+    let mut cmd = if native.is_file() {
+        Command::new(native)
+    } else {
+        // npm installs a .cmd shim, which needs cmd to run.
+        let mut c = Command::new("cmd");
+        c.args(["/d", "/c", "claude"]);
+        c
+    };
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let child = cmd
+        .args(["auth", "status"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn();
+    let Ok(mut child) = child else {
+        crate::dlog!("claude usage: Claude Code CLI not found");
+        return false;
+    };
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) if started.elapsed() < Duration::from_secs(30) => std::thread::sleep(Duration::from_millis(200)),
+            _ => {
+                let _ = child.kill();
+                return false;
+            }
+        }
+    }
+}
+
 fn fetch() {
+    fetch_once(true);
+}
+
+fn fetch_once(may_renew: bool) {
     let Some(creds) = read_creds() else {
         *NEXT.lock().unwrap() = Some(Instant::now() + EVERY);
         return publish(Usage {
@@ -133,6 +186,10 @@ fn fetch() {
     let plan = creds.plan.clone();
     // Claude Code refreshes its own sign-in; we never do (that would mean writing the file).
     if creds.expires_at.is_some_and(|e| e < now_ms()) {
+        drop(creds);
+        if may_renew && renew_signin() {
+            return fetch_once(false);
+        }
         *NEXT.lock().unwrap() = Some(Instant::now() + Duration::from_secs(60));
         return publish(with_status("expired", "Open Claude Code once to refresh your sign-in", plan));
     }
@@ -150,6 +207,7 @@ fn fetch() {
             ),
             None => (EVERY, with_status("error", "The usage service answered in an unexpected way", plan)),
         },
+        Ok((401 | 403, _)) if may_renew && renew_signin() => return fetch_once(false),
         Ok((401 | 403, _)) => (
             Duration::from_secs(60),
             with_status("expired", "Open Claude Code once to refresh your sign-in", plan),
