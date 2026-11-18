@@ -136,7 +136,9 @@ pub fn start(app: AppHandle) {
                 };
 
             if is_hidden() {
-                if (at_edge && !buttons_down()) || popups_open(&app) {
+                // Opening Start (or search) brings the bar up with it, like the taskbar.
+                let start = win::is_start_ui(unsafe { GetForegroundWindow() });
+                if (at_edge && !buttons_down()) || popups_open(&app) || start {
                     slide(&app, 0);
                     last_needed = Instant::now();
                 }

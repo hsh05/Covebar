@@ -169,4 +169,15 @@ pub fn is_shell_ui(h: HWND) -> bool {
         file_stem_lower(&exe).as_str(),
         "startmenuexperiencehost" | "searchhost" | "searchapp" | "shellexperiencehost" | "shellhost"
     ) || matches!(class_name(h).as_str(), "Shell_TrayWnd" | "Shell_SecondaryTrayWnd")
+        || is_start_ui(h)
+}
+
+/// The Start menu or search (newer Windows 11 builds run Start inside SearchHost). Alt+Tab
+/// and Task View are Explorer windows and deliberately don't count.
+pub fn is_start_ui(h: HWND) -> bool {
+    if h.is_invalid() {
+        return false;
+    }
+    let exe = process_path(window_pid(h)).unwrap_or_default();
+    matches!(file_stem_lower(&exe).as_str(), "startmenuexperiencehost" | "searchhost" | "searchapp")
 }
