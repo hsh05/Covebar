@@ -195,9 +195,16 @@ pub fn click(id: String, button: String, center: Option<i32>) {
         if button == "left" {
             // Icons sharing a tooltip have ids like "Name#2".
             let nth = b.id.rsplit_once('#').and_then(|(_, n)| n.parse::<usize>().ok()).map_or(0, |n| n.saturating_sub(1));
-            if crate::notify::left_click(&b.tooltip, nth) {
+            let reg = registry();
+            let exe = best_match(&reg, b.tooltip.lines().next().unwrap_or("")).and_then(|r| r.exe.clone());
+            if crate::notify::left_click(&b.tooltip, nth, exe.as_deref()) {
                 return;
             }
+            if exe.as_deref().is_some_and(crate::notify::show_program) {
+                crate::dlog!("tray click: click message unknown, showed the app's window");
+                return;
+            }
+            crate::dlog!("tray click: click message unknown, using UI Automation");
         }
         let r = unsafe {
             if button == "right" {

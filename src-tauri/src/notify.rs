@@ -251,39 +251,132 @@ fn norm(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
 }
 
-/// The `nth` icon (0-based, for icons sharing a tooltip) whose tooltip matches `tooltip`.
-fn find(tooltip: &str, nth: usize) -> Option<Icon> {
+/// File name of a program path, lowercased.
+fn exe_name(path: &str) -> String {
+    path.rsplit(['\\', '/']).next().unwrap_or("").to_lowercase()
+}
+
+fn icon_exe(i: &Icon) -> String {
+    crate::win::process_path(crate::win::window_pid(HWND(i.hwnd as *mut _))).map(|p| exe_name(&p)).unwrap_or_default()
+}
+
+/// The `nth` icon (0-based, for icons sharing a tooltip) whose tooltip matches `tooltip`, or
+/// else that belongs to the program `exe` (some apps leave the tooltip empty).
+fn find(tooltip: &str, nth: usize, exe: Option<&str>) -> Option<Icon> {
     let want = norm(tooltip);
     let first = norm(tooltip.lines().next().unwrap_or(""));
     let icons = ICONS.lock().unwrap();
     let usable = || icons.iter().filter(|i| i.msg != 0);
-    let exact: Vec<&Icon> = usable().filter(|i| norm(&i.tip) == want).collect();
-    let pick = if !exact.is_empty() {
-        exact
-    } else {
-        usable().filter(|i| !first.is_empty() && norm(i.tip.lines().next().unwrap_or("")) == first).collect()
-    };
+    let mut pick: Vec<&Icon> = usable().filter(|i| norm(&i.tip) == want).collect();
+    if pick.is_empty() && !first.is_empty() {
+        pick = usable().filter(|i| norm(i.tip.lines().next().unwrap_or("")) == first).collect();
+    }
+    if pick.is_empty() {
+        if let Some(exe) = exe.map(exe_name).filter(|e| !e.is_empty()) {
+            pick = usable().filter(|i| icon_exe(i) == exe).collect();
+        }
+    }
     pick.get(nth).or(pick.first()).map(|i| (*i).clone())
+}
+
+/// Send TaskbarCreated straight to every window of the program `exe`, including message-only
+/// windows, which the broadcast never reaches (Spotify keeps its tray window there).
+fn ask_program(exe: &str) {
+    use windows::core::BOOL;
+    let exe = exe_name(exe);
+    if exe.is_empty() {
+        return;
+    }
+    let mut windows: Vec<HWND> = Vec::new();
+    unsafe extern "system" fn each(h: HWND, lp: LPARAM) -> BOOL {
+        (*(lp.0 as *mut Vec<HWND>)).push(h);
+        BOOL(1)
+    }
+    unsafe {
+        let _ = EnumWindows(Some(each), LPARAM(&mut windows as *mut _ as isize));
+        let mut prev: Option<HWND> = None;
+        while let Ok(h) = FindWindowExW(Some(HWND_MESSAGE), prev, PCWSTR::null(), PCWSTR::null()) {
+            if h.is_invalid() {
+                break;
+            }
+            windows.push(h);
+            prev = Some(h);
+        }
+        let m = RegisterWindowMessageW(w!("TaskbarCreated"));
+        let mut pids: std::collections::HashMap<u32, bool> = std::collections::HashMap::new();
+        for h in windows {
+            let pid = crate::win::window_pid(h);
+            let ours = *pids.entry(pid).or_insert_with(|| crate::win::process_path(pid).is_some_and(|p| exe_name(&p) == exe));
+            if ours {
+                let _ = SendNotifyMessageW(h, m, WPARAM(0), LPARAM(0));
+            }
+        }
+    }
+}
+
+/// For an icon whose app never told us its click message (it was running before the bar and
+/// ignores TaskbarCreated): bring back the program's main window, which is what a left click
+/// on such an icon does. Its window may be hidden while the app sits in the tray.
+pub fn show_program(exe: &str) -> bool {
+    use windows::core::BOOL;
+    let exe = exe_name(exe);
+    if exe.is_empty() {
+        return false;
+    }
+    let mut all: Vec<HWND> = Vec::new();
+    unsafe extern "system" fn each(h: HWND, lp: LPARAM) -> BOOL {
+        (*(lp.0 as *mut Vec<HWND>)).push(h);
+        BOOL(1)
+    }
+    unsafe {
+        let _ = EnumWindows(Some(each), LPARAM(&mut all as *mut _ as isize));
+        let mut pids: std::collections::HashMap<u32, bool> = std::collections::HashMap::new();
+        let mut main = |h: &HWND| {
+            let pid = crate::win::window_pid(*h);
+            *pids.entry(pid).or_insert_with(|| crate::win::process_path(pid).is_some_and(|p| exe_name(&p) == exe))
+                && GetWindow(*h, GW_OWNER).map_or(true, |o| o.is_invalid())
+                && GetWindowLongW(*h, GWL_EXSTYLE) as u32 & WS_EX_TOOLWINDOW.0 == 0
+                && GetWindowLongW(*h, GWL_STYLE) as u32 & WS_CAPTION.0 == WS_CAPTION.0
+                && !crate::win::window_title(*h).is_empty()
+        };
+        let found: Vec<HWND> = all.into_iter().filter(|h| main(h)).collect();
+        // Prefer a window that's already showing.
+        let Some(h) = found.iter().find(|h| IsWindowVisible(**h).as_bool()).or(found.first()).copied() else {
+            return false;
+        };
+        if !IsWindowVisible(h).as_bool() {
+            let _ = ShowWindow(h, SW_SHOW);
+        }
+        crate::apps::activate(h);
+    }
+    true
 }
 
 /// Left-click the icon with this tooltip like the Windows taskbar would. False when it isn't
 /// known (the caller falls back to UI Automation).
-pub fn left_click(tooltip: &str, nth: usize) -> bool {
+pub fn left_click(tooltip: &str, nth: usize, exe: Option<&str>) -> bool {
     if HOST.load(Ordering::SeqCst) <= 0 {
         return false;
     }
-    let mut icon = find(tooltip, nth);
+    let mut icon = find(tooltip, nth, exe);
     if icon.is_none() {
-        // Its app may have added it before we were listening: ask everyone again, once in a while.
+        // Its app added it before we were listening and didn't hear the broadcast: ask it
+        // directly (or everyone, once in a while, when the program isn't known).
         let recent = LAST_BROADCAST.lock().unwrap().is_some_and(|t| t.elapsed() < Duration::from_secs(30));
-        if !recent {
+        if let Some(exe) = exe {
+            ask_program(exe);
+        } else if !recent {
             broadcast_taskbar_created();
-            std::thread::sleep(Duration::from_millis(400));
-            icon = find(tooltip, nth);
+        }
+        for _ in 0..8 {
+            std::thread::sleep(Duration::from_millis(60));
+            icon = find(tooltip, nth, exe);
+            if icon.is_some() {
+                break;
+            }
         }
     }
     let Some(i) = icon else {
-        crate::dlog!("tray click: no app window known for this icon, using UI Automation");
         return false;
     };
     let h = HWND(i.hwnd as *mut _);
