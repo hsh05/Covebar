@@ -1,4 +1,5 @@
 import type { Component } from "svelte";
+import WIDGET_IDS from "./widget-ids.json";
 import AppsTile from "../widgets/apps/AppsTile.svelte";
 import ClockTile from "../widgets/clock/ClockTile.svelte";
 import ClockCard from "../widgets/clock/ClockCard.svelte";
@@ -124,3 +125,22 @@ export const WIDGETS: Record<string, WidgetDef> = {
     cardSize: { width: 316, height: 392 },
   },
 };
+
+/** The widget ids the backend knows (shared with it through widget-ids.json), in default order. */
+export { WIDGET_IDS };
+
+/** Ids that are in widget-ids.json but have no widget here, and the other way round. */
+export function widgetMismatch(ids: readonly string[] = WIDGET_IDS, defs: Record<string, WidgetDef> = WIDGETS) {
+  return {
+    missing: ids.filter((id) => !defs[id]),
+    unlisted: Object.keys(defs).filter((id) => !ids.includes(id)),
+    wrongId: Object.entries(defs)
+      .filter(([key, d]) => d.id !== key)
+      .map(([key]) => key),
+  };
+}
+
+if (import.meta.env.DEV) {
+  const m = widgetMismatch();
+  if (m.missing.length || m.unlisted.length || m.wrongId.length) console.error("Widget list out of sync with widget-ids.json", m);
+}

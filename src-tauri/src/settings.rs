@@ -3,9 +3,14 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-/// Widgets that exist in this build, in their default order.
-pub const KNOWN_WIDGETS: &[&str] =
-    &["apps", "media", "timer", "recycle", "currency", "claude", "temperature", "brightness", "mic", "volume", "tray", "clock"];
+/// Widgets that exist in this build, in their default order. The list lives in
+/// `src/lib/widget-ids.json`, shared with the frontend so the two can't drift apart.
+pub fn known_widgets() -> &'static [String] {
+    static IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    IDS.get_or_init(|| {
+        serde_json::from_str(include_str!("../../src/lib/widget-ids.json")).expect("widget-ids.json is a list of ids")
+    })
+}
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -113,9 +118,9 @@ impl Default for Settings {
             clock24h: true,
             clock_seconds: true,
             week_starts_monday: true,
-            widgets: KNOWN_WIDGETS
+            widgets: known_widgets()
                 .iter()
-                .map(|id| WidgetEntry { id: id.to_string(), enabled: true })
+                .map(|id| WidgetEntry { id: id.clone(), enabled: true })
                 .collect(),
             autostart: false,
             hide_taskbar: true,
@@ -138,21 +143,21 @@ impl Settings {
                 w.enabled = true;
             }
         }
+        let known = known_widgets();
         let mut seen = std::collections::HashSet::new();
-        self.widgets
-            .retain(|w| KNOWN_WIDGETS.contains(&w.id.as_str()) && seen.insert(w.id.clone()));
+        self.widgets.retain(|w| known.contains(&w.id) && seen.insert(w.id.clone()));
         // New widgets go after their nearest known predecessor in the default order.
-        for (i, id) in KNOWN_WIDGETS.iter().enumerate() {
+        for (i, id) in known.iter().enumerate() {
             if self.widgets.iter().any(|w| w.id == *id) {
                 continue;
             }
-            let at = KNOWN_WIDGETS[..i]
+            let at = known[..i]
                 .iter()
                 .rev()
                 .find_map(|prev| self.widgets.iter().position(|w| w.id == *prev))
                 .map(|p| p + 1)
                 .unwrap_or(0);
-            self.widgets.insert(at, WidgetEntry { id: id.to_string(), enabled: true });
+            self.widgets.insert(at, WidgetEntry { id: id.clone(), enabled: true });
         }
         self.timer_presets.retain(|s| (1..=86_400).contains(s));
         self.timer_presets.dedup();
