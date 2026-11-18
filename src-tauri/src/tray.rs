@@ -347,7 +347,7 @@ fn read_registry() -> Vec<RegIcon> {
                 Some(buf)
             };
             let text = |b: Vec<u8>| {
-                let w: Vec<u16> = b.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).take_while(|c| *c != 0).collect();
+                let w: Vec<u16> = b.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes([c[0], c[1]])).take_while(|c| *c != 0).collect();
                 String::from_utf16_lossy(&w)
             };
             let exe = read("ExecutablePath", RRF_RT_REG_SZ).map(text).map(|p| expand_known_folder(&p));

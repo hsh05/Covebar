@@ -281,11 +281,13 @@ mod tests {
 
     #[test]
     fn normalize_cleans_timer_presets_and_currencies() {
-        let mut s = Settings::default();
-        s.timer_presets = vec![0, 60, 60, 100_000, 300];
-        s.currency_base = " eur ".into();
-        s.currency_quote = "dollars".into();
-        s.currency_favorites = vec!["gbp".into(), "GBP".into(), "x1".into()];
+        let mut s = Settings {
+            timer_presets: vec![0, 60, 60, 100_000, 300],
+            currency_base: " eur ".into(),
+            currency_quote: "dollars".into(),
+            currency_favorites: vec!["gbp".into(), "GBP".into(), "x1".into()],
+            ..Default::default()
+        };
         s.normalize();
         assert_eq!(s.timer_presets, vec![60, 300]);
         assert_eq!(s.currency_base, "EUR");

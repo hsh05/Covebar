@@ -236,6 +236,7 @@ fn set_app_volume(source: String, volume: Option<f32>, muted: Option<bool>) {
 
 /// The dock's visible bar, in the dock's CSS px; clicks elsewhere in its window pass through.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // the frontend passes the rect as named fields
 fn set_dock_region(app: AppHandle, state: State<AppState>, x: f64, y: f64, w: f64, h: f64, radius: Option<f64>, full: bool) {
     let Some(dock) = app.get_webview_window("dock") else { return };
     let Some(hw) = win::tauri_hwnd(&dock) else { return };

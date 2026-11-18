@@ -51,7 +51,7 @@ pub fn start(app: AppHandle) {
         let mut n = 0u32;
         Worker::spawn(com_mta, Duration::from_secs(5), move || {
             // DDC/CI reads are slow and some monitors dislike being polled, so read them less often.
-            refresh(n % 3 == 0);
+            refresh(n.is_multiple_of(3));
             n = n.wrapping_add(1);
         })
     });
