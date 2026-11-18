@@ -2,7 +2,8 @@
 //!
 //! Explorer stays the tray host. On Windows 11 its tray is XAML; UI Automation still sees its
 //! buttons while the taskbar is hidden, so they are read from there and clicks are forwarded
-//! to them (Invoke for a click, the element's context menu for a right click). UI Automation
+//! to them (the element's context menu for a right click; a left click goes to the app the way
+//! the taskbar sends it, see notify.rs, with Invoke as the fallback). UI Automation
 //! gives no pixels, so the pictures come from the snapshots Windows keeps of every tray icon
 //! under `HKCU\Control Panel\NotifyIconSettings`, matched by tooltip and program name.
 
@@ -144,7 +145,9 @@ fn buttons() -> windows::core::Result<Option<Vec<Button>>> {
 }
 
 fn refresh() {
-    if !enabled() {
+    let on = enabled();
+    crate::notify::set_running(on);
+    if !on {
         return;
     }
     let state = match buttons() {
@@ -189,6 +192,13 @@ pub fn click(id: String, button: String, center: Option<i32>) {
         let Ok(Some(list)) = buttons() else { return };
         let target = list.into_iter().find(|b| if button == "overflow" { b.overflow } else { !b.overflow && b.id == id });
         let Some(b) = target else { return };
+        if button == "left" {
+            // Icons sharing a tooltip have ids like "Name#2".
+            let nth = b.id.rsplit_once('#').and_then(|(_, n)| n.parse::<usize>().ok()).map_or(0, |n| n.saturating_sub(1));
+            if crate::notify::left_click(&b.tooltip, nth) {
+                return;
+            }
+        }
         let r = unsafe {
             if button == "right" {
                 b.el.cast::<IUIAutomationElement3>().and_then(|e| e.ShowContextMenu())

@@ -33,6 +33,7 @@ mod taskbar;
 mod timers;
 mod tray;
 mod net;
+mod notify;
 mod currency;
 mod temps;
 mod claude;
