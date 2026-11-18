@@ -379,6 +379,7 @@ pub fn left_click(tooltip: &str, nth: usize, exe: Option<&str>) -> bool {
     let Some(i) = icon else {
         return false;
     };
+    crate::dlog!("tray click: sending a click (version {}, tooltip set: {}, program {})", i.version, !i.tip.is_empty(), icon_exe(&i));
     let h = HWND(i.hwnd as *mut _);
     unsafe {
         let _ = AllowSetForegroundWindow(crate::win::window_pid(h));

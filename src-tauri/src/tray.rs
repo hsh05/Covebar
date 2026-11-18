@@ -197,6 +197,7 @@ pub fn click(id: String, button: String, center: Option<i32>) {
             let nth = b.id.rsplit_once('#').and_then(|(_, n)| n.parse::<usize>().ok()).map_or(0, |n| n.saturating_sub(1));
             let reg = registry();
             let exe = best_match(&reg, b.tooltip.lines().next().unwrap_or("")).and_then(|r| r.exe.clone());
+            crate::dlog!("tray click: left on {:?}, program {:?}", b.id, exe);
             if crate::notify::left_click(&b.tooltip, nth, exe.as_deref()) {
                 return;
             }
