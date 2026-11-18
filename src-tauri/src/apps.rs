@@ -363,6 +363,27 @@ pub struct Pin {
     name: String,
     target: Option<String>,
     aumid: Option<String>,
+    /// For pins that start an app through a launcher (Discord, Slack, Teams classic and other
+    /// Squirrel apps run `Update.exe --processStart App.exe`): the folder the real program
+    /// lives under and its file name, both lowercase.
+    launched: Option<(String, String)>,
+}
+
+/// `Update.exe --processStart App.exe` -> (Update.exe's folder, "app.exe").
+fn launched_program(target: Option<&str>, args: &str) -> Option<(String, String)> {
+    let target = target?;
+    if win::file_stem_lower(target) != "update" {
+        return None;
+    }
+    let mut it = args.split_whitespace();
+    while let Some(a) = it.next() {
+        if a.eq_ignore_ascii_case("--processStart") || a.eq_ignore_ascii_case("--processStartAndWait") {
+            let exe = it.next()?.trim_matches('"').to_lowercase();
+            let dir = std::path::Path::new(target).parent()?.to_string_lossy().to_lowercase();
+            return Some((dir, exe));
+        }
+    }
+    None
 }
 
 fn pins_dir() -> Option<PathBuf> {
@@ -384,9 +405,10 @@ pub fn read_pins() -> Vec<Pin> {
         .into_iter()
         .map(|p| {
             let lnk = p.to_string_lossy().to_string();
-            let (target, aumid) = resolve_link(&lnk);
+            let (target, aumid, args) = resolve_link(&lnk);
             Pin {
                 name: p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(),
+                launched: launched_program(target.as_deref(), &args),
                 lnk,
                 target,
                 aumid,
@@ -395,16 +417,23 @@ pub fn read_pins() -> Vec<Pin> {
         .collect()
 }
 
-fn resolve_link(lnk: &str) -> (Option<String>, Option<String>) {
+/// A shortcut's target program, AppUserModelID and arguments.
+fn resolve_link(lnk: &str) -> (Option<String>, Option<String>, String) {
     unsafe {
         let Ok(link) = CoCreateInstance::<_, IShellLinkW>(&ShellLink, None, CLSCTX_INPROC_SERVER) else {
-            return (None, None);
+            return (None, None, String::new());
         };
         let w = wide(lnk);
-        let Ok(pf) = link.cast::<IPersistFile>() else { return (None, None) };
+        let Ok(pf) = link.cast::<IPersistFile>() else { return (None, None, String::new()) };
         if pf.Load(PCWSTR(w.as_ptr()), STGM_READ).is_err() {
-            return (None, None);
+            return (None, None, String::new());
         }
+        let mut abuf = [0u16; 1024];
+        let args = link
+            .GetArguments(&mut abuf)
+            .ok()
+            .map(|_| String::from_utf16_lossy(&abuf[..abuf.iter().position(|&c| c == 0).unwrap_or(0)]))
+            .unwrap_or_default();
         let mut buf = [0u16; 1024];
         let mut fd = WIN32_FIND_DATAW::default();
         let target = link
@@ -418,7 +447,7 @@ fn resolve_link(lnk: &str) -> (Option<String>, Option<String>) {
             .and_then(|s| s.GetValue(&PKEY_AppUserModel_ID).ok())
             .map(|v| v.to_string())
             .filter(|s| !s.is_empty());
-        (target, aumid)
+        (target, aumid, args)
     }
 }
 
@@ -461,7 +490,11 @@ fn build_snapshot(pins: &[Pin]) -> AppsSnapshot {
             let hit = explorer
                 || (pin.aumid.is_some() && pin.aumid == *aumid)
                 || (aumid.is_none() && tgt.as_deref() == Some(exe.to_lowercase().as_str()))
-                || (pin.aumid.is_some() && pin.aumid.as_deref() == Some(key.as_str()));
+                || (pin.aumid.is_some() && pin.aumid.as_deref() == Some(key.as_str()))
+                || pin.launched.as_ref().is_some_and(|(dir, name)| {
+                    let e = exe.to_lowercase();
+                    e.starts_with(dir.as_str()) && e.rsplit(['\\', '/']).next() == Some(name.as_str())
+                });
             if hit {
                 windows.extend(wins.iter().cloned());
             }
