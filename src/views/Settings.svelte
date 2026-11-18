@@ -26,6 +26,39 @@
     }
   }
 
+  // ---- backup: export to a JSON file (saved to Downloads) and import one back
+  let backupNote = $state("");
+  let importInput = $state<HTMLInputElement>();
+  function exportSettings() {
+    const data = { app: appName, version, exportedAt: new Date().toISOString(), settings: $state.snapshot(s) };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${appName.toLowerCase()}-settings.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    backupNote = "Saved to your Downloads folder.";
+  }
+  async function importSettings(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    error = "";
+    backupNote = "";
+    try {
+      const data = JSON.parse(await file.text());
+      const imported = data && typeof data === "object" && "settings" in data ? data.settings : data;
+      if (!imported || typeof imported !== "object" || !Array.isArray(imported.widgets)) {
+        throw new Error("That file isn't a Covebar settings backup.");
+      }
+      await updateSettings(imported as Partial<Settings>);
+      backupNote = `Imported settings from ${file.name}.`;
+    } catch (err) {
+      error = err instanceof SyntaxError ? "That file isn't valid JSON." : err instanceof Error ? err.message : String(err);
+    }
+  }
+
   // ---- shortcuts and timer presets
   const keys = hotkeyStatus();
   const DEFAULT_KEYS: Hotkeys = { micMute: "Win+Alt+M", speakerMute: "Win+Alt+S" };
@@ -181,6 +214,20 @@
         {@render choice("Position", s.edge, [["bottom", "Bottom"], ["top", "Top"]], (v) => set("edge", v))}
       </div>
       <p class="note">You can also drag the bar's empty space to the top or bottom of the screen.</p>
+      <div class="group">
+        <div class="row">
+          <div class="text">
+            <span class="label">Back up settings</span>
+            <span class="hint">Move your bar, widgets and shortcuts to another PC</span>
+          </div>
+          <div class="backup">
+            <button class="plain" onclick={exportSettings}>Export…</button>
+            <button class="plain" onclick={() => importInput?.click()}>Import…</button>
+            <input bind:this={importInput} type="file" accept=".json,application/json" hidden onchange={importSettings} />
+          </div>
+        </div>
+      </div>
+      {#if backupNote}<p class="note ok">{backupNote}</p>{/if}
     {:else if section === "Appearance"}
       <div class="group">
         {@render choice("Theme", s.theme, [["system", "System"], ["dark", "Dark"], ["light", "Light"]], (v) => set("theme", v))}
@@ -267,6 +314,22 @@
 </div>
 
 <style>
+  .backup {
+    display: flex;
+    gap: 6px;
+  }
+  .plain {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    transition: background-color var(--t-fast) var(--ease-out);
+  }
+  .plain:hover {
+    background: var(--hover);
+  }
+  .note.ok {
+    color: var(--accent);
+  }
   .about-actions {
     display: flex;
     gap: 8px;
