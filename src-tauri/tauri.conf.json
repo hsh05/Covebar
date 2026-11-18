@@ -28,16 +28,39 @@
         "dragDropEnabled": false
       }
     ],
-    "security": { "csp": null }
+    "security": {
+      "csp": null
+    }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true,
+    "publisher": "Covebar",
+    "shortDescription": "A dock and taskbar for Windows, with widgets",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEwQTdBMTRDNTUyMTYwMDUKUldRRllDRlZUS0duRUwwQ3hpQzNxRE5DVjFEN2pxc0hLOGVBMWhuREVaa1YrVkZpYTQ1cURpVUUK",
+      "endpoints": [
+        "https://github.com/hsh05/Covebar/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

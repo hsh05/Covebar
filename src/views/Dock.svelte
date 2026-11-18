@@ -284,11 +284,27 @@
     await showMenu(entries);
   }
 
+  // A newer version was found: offered at the top of the bar's menu.
+  let newVersion = $state<{ version: string } | null>(null);
+  invoke<{ version: string } | null>("found_update").then((u) => (newVersion = u));
+  listen<{ version: string } | null>("update-available", (e) => (newVersion = e.payload));
+
   async function menu(e: MouseEvent) {
     e.preventDefault();
     const other: Edge = edge === "bottom" ? "top" : "bottom";
     const autoHide = store.s?.autoHide ?? false;
+    const upd = newVersion;
     await showMenu([
+      ...(upd
+        ? [
+            {
+              label: `Update ${appName} to ${upd.version}`,
+              icon: "download" as const,
+              action: () => invoke("open_settings_at", { section: "About" }),
+            },
+            { separator: true } as const,
+          ]
+        : []),
       { label: "Task Manager", icon: "activity", action: () => invoke("launch_app", { target: "taskmgr.exe" }) },
       { label: `${appName} settings`, icon: "settings", action: () => invoke("open_settings") },
       { label: `Move bar to the ${other}`, icon: "swap", action: () => updateSettings({ edge: other }) },

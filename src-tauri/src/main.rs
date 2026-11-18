@@ -22,6 +22,7 @@ mod autohide;
 mod brightness;
 mod dock;
 mod hotkeys;
+mod update;
 mod winkeys;
 mod icons;
 mod popups;
@@ -312,6 +313,21 @@ fn show_alarm(app: AppHandle, anchor_x: Option<f64>, anchor_width: Option<f64>) 
 }
 
 #[tauri::command]
+async fn check_update(app: AppHandle) -> Result<Option<update::UpdateInfo>, String> {
+    update::check(&app).await
+}
+
+#[tauri::command]
+fn found_update() -> Option<update::UpdateInfo> {
+    update::found()
+}
+
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    update::install(&app).await
+}
+
+#[tauri::command]
 fn leave_bar(restore: bool) {
     dock::leave_bar(restore);
 }
@@ -394,6 +410,22 @@ fn get_hotkey_status() -> hotkeys::HotkeyStatus {
 #[tauri::command]
 async fn open_settings(app: AppHandle) -> Result<(), String> {
     show_settings(&app).map_err(|e| e.to_string())
+}
+
+/// The section the settings window should show when it next opens or is brought forward.
+static SETTINGS_SECTION: Mutex<Option<String>> = Mutex::new(None);
+
+#[tauri::command]
+async fn open_settings_at(app: AppHandle, section: String) -> Result<(), String> {
+    *SETTINGS_SECTION.lock().unwrap() = Some(section.clone());
+    show_settings(&app).map_err(|e| e.to_string())?;
+    let _ = app.emit_to("settings", "settings-section", section);
+    Ok(())
+}
+
+#[tauri::command]
+fn take_settings_section() -> Option<String> {
+    SETTINGS_SECTION.lock().unwrap().take()
 }
 
 #[tauri::command]
@@ -481,6 +513,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     currency::start(handle.clone(), config_dir.join("currency.json"));
     claude::start(handle.clone());
     autohide::start(handle.clone());
+    update::start(handle.clone());
     if !settings.tour_done {
         // Give the bar a moment to settle before the tour points at it.
         let h = handle.clone();
@@ -494,7 +527,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn cleanup(app: &AppHandle) {
+pub(crate) fn cleanup(app: &AppHandle) {
     timers::shutdown();
     if let Some(h) = app.get_webview_window("dock").and_then(|d| win::tauri_hwnd(&d)) {
         appbar::remove(h);
@@ -531,6 +564,7 @@ fn main() {
             let _ = show_settings(app);
         }))
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(setup)
         .invoke_handler(tauri::generate_handler![
             get_settings,
@@ -586,10 +620,15 @@ fn main() {
             open_log_folder,
             show_tour,
             leave_bar,
+            check_update,
+            found_update,
+            install_update,
             hide_tour,
             get_hotkey_status,
             pause_hotkeys,
             open_settings,
+            open_settings_at,
+            take_settings_section,
             quit,
         ])
         .build(tauri::generate_context!())

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getName, getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
   import { store, updateSettings } from "../lib/settings.svelte";
   import { WIDGETS } from "../lib/widgets";
   import type { Settings, ShortcutName, WidgetEntry } from "../lib/types";
@@ -15,6 +16,16 @@
 
   const sections = ["General", "Appearance", "Widgets", "Shortcuts", "Clock", "Timer", "About"] as const;
   let section = $state<(typeof sections)[number]>("General");
+  // Opened from the bar for a particular page (the update offer opens About).
+  const goTo = (name: string | null) => {
+    const hit = sections.find((n) => n === name);
+    if (hit) section = hit;
+  };
+  invoke<string | null>("take_settings_section").then(goTo);
+  listen<string>("settings-section", (e) => {
+    goTo(e.payload);
+    invoke("take_settings_section");
+  });
   let error = $state("");
 
   async function set<K extends keyof Settings>(key: K, value: Settings[K]) {
@@ -23,6 +34,42 @@
       await updateSettings({ [key]: value } as Partial<Settings>);
     } catch (e) {
       error = String(e);
+    }
+  }
+
+  // ---- updates from GitHub releases (release builds also check on their own)
+  type UpdateInfo = { version: string; notes: string | null };
+  let found = $state<UpdateInfo | null>(null);
+  let updateBusy = $state(false);
+  let updateNote = $state("Covebar looks for updates twice a day.");
+  let updatePct = $state<number | null>(null);
+  invoke<UpdateInfo | null>("found_update").then((f) => (found = f));
+  listen<UpdateInfo | null>("update-available", (e) => (found = e.payload));
+  listen<[number, number | null]>("update-progress", (e) => {
+    const [got, total] = e.payload;
+    updatePct = total ? Math.min(100, (got / total) * 100) : null;
+  });
+  async function checkUpdate() {
+    updateBusy = true;
+    updateNote = "Checking…";
+    try {
+      found = await invoke<UpdateInfo | null>("check_update");
+      updateNote = found ? `Version ${found.version} is ready to install.` : "You have the latest version.";
+    } catch (e) {
+      updateNote = `Couldn't check for updates: ${e}`;
+    } finally {
+      updateBusy = false;
+    }
+  }
+  async function installUpdate() {
+    updateBusy = true;
+    updateNote = "Downloading the update…";
+    try {
+      await invoke("install_update");
+    } catch (e) {
+      updateNote = `Couldn't install the update: ${e}`;
+      updatePct = null;
+      updateBusy = false;
     }
   }
 
@@ -327,6 +374,26 @@
           If the Windows taskbar ever stays hidden, run <code>{appName.toLowerCase()}.exe --restore-taskbar</code>.
         </p>
       </div>
+      <div class="group">
+        <div class="row">
+          <div class="text">
+            <span class="label">{found ? `Update to ${found.version}` : "Updates"}</span>
+            <span class="hint">{updateNote}</span>
+          </div>
+          {#if found}
+            <button class="plain primary" disabled={updateBusy} onclick={installUpdate}>
+              {updateBusy ? "Installing…" : "Install and restart"}
+            </button>
+          {:else}
+            <button class="plain" disabled={updateBusy} onclick={checkUpdate}>
+              {updateBusy ? "Checking…" : "Check now"}
+            </button>
+          {/if}
+        </div>
+        {#if updatePct != null}
+          <div class="progress"><span style:width="{updatePct}%"></span></div>
+        {/if}
+      </div>
       <div class="about-actions">
         <button onclick={() => invoke("show_tour")}>Show the tour</button>
         <button onclick={() => invoke("open_log_folder")}>Open log folder</button>
@@ -352,6 +419,24 @@
   }
   .note.ok {
     color: var(--accent);
+  }
+  .plain.primary {
+    background: var(--accent);
+    border-color: transparent;
+    color: var(--on-accent, #fff);
+  }
+  .progress {
+    height: 4px;
+    margin: 0 14px 12px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--text) 12%, transparent);
+    overflow: hidden;
+  }
+  .progress span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width 200ms ease-out;
   }
   .about-actions {
     display: flex;
