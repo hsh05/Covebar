@@ -7,7 +7,6 @@
   import { getName } from "@tauri-apps/api/app";
   import { showMenu, type MenuEntry } from "../lib/menu";
   import { widgetMenu } from "../lib/widgetMenus";
-  import { startMenuEntries } from "../lib/startMenu";
   import { store, updateSettings } from "../lib/settings.svelte";
   import { WIDGETS } from "../lib/widgets";
   import type { Edge } from "../lib/types";
@@ -336,12 +335,11 @@
   onpointercancel={up}
   oncontextmenu={menu}
   oncontextmenucapture={(e) => {
-    // Shift+right-click anywhere, even on an app or widget, opens the Start button's menu.
+    // Shift+right-click anywhere, even on an app or widget, opens the bar's own menu.
     if (!e.shiftKey) return;
-    e.preventDefault();
     e.stopPropagation();
     invoke("hide_preview").catch(() => {});
-    showMenu(startMenuEntries());
+    menu(e);
   }}
 >
   <div
