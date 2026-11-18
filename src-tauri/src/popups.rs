@@ -20,7 +20,7 @@ use windows::Win32::Graphics::Dwm::{
 pub const PAD: f64 = 16.0;
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    for (label, w, h) in [("card", 320.0, 360.0), ("preview", 240.0, 180.0), ("menu", 240.0, 200.0), ("osd", OSD_SIZE, OSD_SIZE), ("alarm", ALARM_W, ALARM_H)] {
+    for (label, w, h) in [("card", 320.0, 360.0), ("preview", 240.0, 180.0), ("menu", 240.0, 200.0), ("osd", OSD_SIZE, OSD_SIZE), ("alarm", ALARM_W, ALARM_H), ("tour", TOUR_W, TOUR_H)] {
         let win = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
             .title(app.package_info().name.clone())
             .decorations(false)
@@ -43,6 +43,29 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         }
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------- first-run tour
+
+const TOUR_W: f64 = 380.0;
+const TOUR_H: f64 = 248.0;
+
+/// Show the short tour above the middle of the dock.
+pub fn show_tour(app: &AppHandle) {
+    let Some(w) = app.get_webview_window("tour") else { return };
+    close_card(app, None);
+    close_menu(app);
+    let d = *app.state::<AppState>().dock.lock().unwrap();
+    place_popup(app, &w, d.x + d.w / 2, TOUR_W, TOUR_H);
+    let _ = app.emit_to("tour", "tour-show", ());
+    let _ = w.show();
+    let _ = w.set_focus();
+}
+
+pub fn hide_tour(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("tour") {
+        let _ = w.hide();
+    }
 }
 
 // ---------------------------------------------------------------- timer alarm

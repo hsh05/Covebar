@@ -29,6 +29,7 @@ export interface Settings {
   currencyBase: string;
   currencyQuote: string;
   currencyFavorites: string[];
+  tourDone: boolean;
 }
 
 export interface WinInfo {

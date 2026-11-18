@@ -310,6 +310,16 @@ fn show_alarm(app: AppHandle, anchor_x: Option<f64>, anchor_width: Option<f64>) 
 }
 
 #[tauri::command]
+fn show_tour(app: AppHandle) {
+    popups::show_tour(&app);
+}
+
+#[tauri::command]
+fn hide_tour(app: AppHandle) {
+    popups::hide_tour(&app);
+}
+
+#[tauri::command]
 fn open_log_folder() {
     if let Some(d) = log::dir() {
         apps::launch(&d.to_string_lossy());
@@ -463,6 +473,15 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     currency::start(handle.clone(), config_dir.join("currency.json"));
     claude::start(handle.clone());
     autohide::start(handle.clone());
+    if !settings.tour_done {
+        // Give the bar a moment to settle before the tour points at it.
+        let h = handle.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+            let a = h.clone();
+            let _ = h.run_on_main_thread(move || popups::show_tour(&a));
+        });
+    }
     dock::start_watcher(handle);
     Ok(())
 }
@@ -557,6 +576,8 @@ fn main() {
             timers_action,
             show_alarm,
             open_log_folder,
+            show_tour,
+            hide_tour,
             get_hotkey_status,
             pause_hotkeys,
             open_settings,

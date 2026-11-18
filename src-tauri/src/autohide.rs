@@ -93,7 +93,7 @@ fn slide(app: &AppHandle, to: i32) {
     }
 }
 
-/// A card, menu or preview is up, or the settings window is open (so you can see your
+/// A card, menu, preview, the timer alarm or the tour is up, or the settings window is open (so you can see your
 /// changes on the bar).
 fn popups_open(app: &AppHandle) -> bool {
     let shown = |l: &str| {
@@ -101,7 +101,7 @@ fn popups_open(app: &AppHandle) -> bool {
             .map(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false))
             .unwrap_or(false)
     };
-    ["card", "menu", "preview", "settings"].into_iter().any(shown)
+    ["card", "menu", "preview", "settings", "alarm", "tour"].into_iter().any(shown)
 }
 
 pub fn start(app: AppHandle) {

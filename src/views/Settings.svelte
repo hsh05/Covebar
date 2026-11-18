@@ -306,6 +306,7 @@
         </p>
       </div>
       <div class="about-actions">
+        <button onclick={() => invoke("show_tour")}>Show the tour</button>
         <button onclick={() => invoke("open_log_folder")}>Open log folder</button>
         <button class="danger" onclick={() => invoke("quit")}>Quit {appName}</button>
       </div>

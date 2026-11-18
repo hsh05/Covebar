@@ -90,6 +90,8 @@ pub struct Settings {
     pub currency_base: String,
     pub currency_quote: String,
     pub currency_favorites: Vec<String>,
+    /// The first-run tour was finished or skipped.
+    pub tour_done: bool,
 }
 
 /// Global shortcuts, as strings like "Win+Alt+M". Empty disables one.
@@ -130,6 +132,7 @@ impl Default for Settings {
             currency_base: "USD".into(),
             currency_quote: "AED".into(),
             currency_favorites: vec!["GBP".into()],
+            tour_done: false,
         }
     }
 }

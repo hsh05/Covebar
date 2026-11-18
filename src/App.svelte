@@ -8,6 +8,7 @@
   import Settings from "./views/Settings.svelte";
   import Osd from "./views/Osd.svelte";
   import Alarm from "./views/Alarm.svelte";
+  import Tour from "./views/Tour.svelte";
 
   const label = getCurrentWebviewWindow().label;
   const ready = initSettings();
@@ -41,5 +42,7 @@
     <Osd />
   {:else if label === "alarm"}
     <Alarm />
+  {:else if label === "tour"}
+    <Tour />
   {/if}
 {/await}
