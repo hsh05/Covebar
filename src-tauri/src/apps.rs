@@ -848,3 +848,28 @@ pub fn dump_icons(dir: &str, size: i32) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn squirrel_pins_point_at_the_real_program() {
+        let t = r"C:\Users\me\AppData\Local\Discord\Update.exe";
+        assert_eq!(
+            launched_program(Some(t), "--processStart Discord.exe"),
+            Some((r"c:\users\me\appdata\local\discord".into(), "discord.exe".into()))
+        );
+        assert_eq!(
+            launched_program(Some(t), r#"--processStart "Slack.exe" --process-start-args "--x""#),
+            Some((r"c:\users\me\appdata\local\discord".into(), "slack.exe".into()))
+        );
+    }
+
+    #[test]
+    fn other_pins_are_left_alone() {
+        assert_eq!(launched_program(Some(r"C:\Program Files\App\app.exe"), "--processStart a.exe"), None);
+        assert_eq!(launched_program(Some(r"C:\x\Update.exe"), "--check"), None);
+        assert_eq!(launched_program(None, "--processStart a.exe"), None);
+    }
+}

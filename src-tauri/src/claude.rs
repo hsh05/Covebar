@@ -269,3 +269,39 @@ fn parse(v: &serde_json::Value) -> Option<Vec<Window>> {
         .collect();
     (!out.is_empty()).then_some(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_known_windows_and_skips_missing_ones() {
+        let v = serde_json::json!({
+            "five_hour": { "utilization": 42.5, "resets_at": "2026-11-18T20:00:00Z" },
+            "seven_day": { "utilization": 130.0, "resets_at": null },
+            "seven_day_opus": null,
+            "extra": { "utilization": 1 }
+        });
+        let w = parse(&v).unwrap();
+        assert_eq!(w.len(), 2);
+        assert_eq!(w[0].key, "session");
+        assert_eq!(w[0].percent, 42.5);
+        assert_eq!(w[0].resets_at.as_deref(), Some("2026-11-18T20:00:00Z"));
+        assert_eq!(w[1].percent, 100.0, "clamped");
+        assert_eq!(w[1].resets_at, None);
+    }
+
+    #[test]
+    fn unexpected_answers_are_not_usage() {
+        assert!(parse(&serde_json::json!({})).is_none());
+        assert!(parse(&serde_json::json!({ "five_hour": { "utilization": "lots" } })).is_none());
+    }
+
+    #[test]
+    fn plan_names() {
+        assert_eq!(plan_name("pro"), "Pro");
+        assert_eq!(plan_name("MAX"), "Max");
+        assert_eq!(plan_name("student"), "Student");
+        assert_eq!(plan_name(""), "");
+    }
+}

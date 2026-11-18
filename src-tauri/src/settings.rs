@@ -226,3 +226,70 @@ pub fn save(path: &Path, s: &Settings) -> std::io::Result<()> {
     std::fs::write(&tmp, serde_json::to_vec_pretty(s)?)?;
     std::fs::rename(&tmp, path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ids(s: &Settings) -> Vec<&str> {
+        s.widgets.iter().map(|w| w.id.as_str()).collect()
+    }
+
+    #[test]
+    fn widget_list_is_valid() {
+        let k = known_widgets();
+        assert!(!k.is_empty());
+        let unique: std::collections::HashSet<_> = k.iter().collect();
+        assert_eq!(unique.len(), k.len(), "duplicate ids in widget-ids.json");
+    }
+
+    #[test]
+    fn normalize_drops_unknown_and_duplicate_widgets() {
+        let mut s = Settings::default();
+        s.widgets.insert(0, WidgetEntry { id: "nope".into(), enabled: true });
+        s.widgets.push(WidgetEntry { id: "clock".into(), enabled: false });
+        s.normalize();
+        assert!(!ids(&s).contains(&"nope"));
+        assert_eq!(ids(&s).iter().filter(|i| **i == "clock").count(), 1);
+        assert_eq!(s.widgets.len(), known_widgets().len());
+    }
+
+    #[test]
+    fn normalize_inserts_new_widgets_after_their_predecessor() {
+        let mut s = Settings::default();
+        // A user who reordered things and whose saved list predates "currency".
+        s.widgets.retain(|w| w.id != "currency");
+        s.widgets.swap(0, 1);
+        s.normalize();
+        let order = ids(&s);
+        let at = order.iter().position(|i| *i == "currency").unwrap();
+        assert_eq!(order[at - 1], "recycle");
+        assert_eq!(&order[..2], &["media", "apps"]);
+    }
+
+    #[test]
+    fn stopwatch_on_the_bar_keeps_the_merged_timer_on() {
+        let mut s = Settings::default();
+        for w in s.widgets.iter_mut().filter(|w| w.id == "timer") {
+            w.enabled = false;
+        }
+        s.widgets.push(WidgetEntry { id: "stopwatch".into(), enabled: true });
+        s.normalize();
+        assert!(s.has_widget("timer"));
+        assert!(!ids(&s).contains(&"stopwatch"));
+    }
+
+    #[test]
+    fn normalize_cleans_timer_presets_and_currencies() {
+        let mut s = Settings::default();
+        s.timer_presets = vec![0, 60, 60, 100_000, 300];
+        s.currency_base = " eur ".into();
+        s.currency_quote = "dollars".into();
+        s.currency_favorites = vec!["gbp".into(), "GBP".into(), "x1".into()];
+        s.normalize();
+        assert_eq!(s.timer_presets, vec![60, 300]);
+        assert_eq!(s.currency_base, "EUR");
+        assert_eq!(s.currency_quote, "AED");
+        assert_eq!(s.currency_favorites, vec!["GBP".to_string()]);
+    }
+}

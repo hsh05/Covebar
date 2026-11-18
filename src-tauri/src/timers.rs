@@ -235,3 +235,46 @@ fn stop_sound() {
 pub fn shutdown() {
     stop_sound();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // One test, since the timer state is global.
+    #[test]
+    fn timer_and_stopwatch_actions() {
+        let t0 = now();
+        let s = action("timerStart", Some(60));
+        assert_eq!(s.timer.duration_ms, 60_000);
+        let end = s.timer.ends_at.unwrap();
+        assert!(end >= t0 + 60_000 && end <= now() + 60_000);
+
+        let s = action("timerPause", None);
+        assert!(s.timer.ends_at.is_none());
+        let left = s.timer.remaining_ms.unwrap();
+        assert!(left <= 60_000 && left > 59_000);
+
+        let s = action("timerAdd", Some(30));
+        assert_eq!(s.timer.remaining_ms, Some(left + 30_000));
+        assert_eq!(s.timer.duration_ms, 90_000);
+
+        let s = action("timerResume", None);
+        assert!(s.timer.ends_at.is_some() && s.timer.remaining_ms.is_none());
+
+        // Zero is clamped to one second; an unknown action changes nothing.
+        let s = action("timerStart", Some(0));
+        assert_eq!(s.timer.duration_ms, 1000);
+        assert_eq!(action("bogus", None), s);
+        assert_eq!(action("timerReset", None).timer, Timer::default());
+
+        let s = action("swLap", None);
+        assert!(s.stopwatch.laps.is_empty(), "no laps while stopped");
+        action("swStart", None);
+        let s = action("swLap", None);
+        assert_eq!(s.stopwatch.laps.len(), 1);
+        let s = action("swPause", None);
+        assert!(s.stopwatch.started_at.is_none());
+        assert!(s.stopwatch.elapsed_ms >= s.stopwatch.laps[0]);
+        assert_eq!(action("swReset", None).stopwatch, Stopwatch::default());
+    }
+}
