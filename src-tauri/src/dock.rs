@@ -169,11 +169,8 @@ pub fn tray_shown() {
     }
     // Start opened over a fullscreen app: bring the bar back now rather than at the next
     // watcher tick, then keep it in front of the taskbar Explorer is showing.
-    if st.fullscreen.load(Ordering::SeqCst) && !fullscreen_on_primary() {
-        st.fullscreen.store(false, Ordering::SeqCst);
-        if let Some(h) = app.get_webview_window("dock").and_then(|d| win::tauri_hwnd(&d)) {
-            win::show_no_activate(h);
-        }
+    if st.fullscreen.load(Ordering::SeqCst) {
+        sync_fullscreen(app);
     }
     raise_over_taskbar(app);
 }
@@ -204,6 +201,32 @@ fn raise_over_taskbar(app: &AppHandle) {
         }
         BUSY.store(false, Ordering::SeqCst);
     });
+}
+
+/// Put the bar behind a fullscreen app on the primary monitor, or back on top once there is
+/// none. Both the watcher and `tray_shown` (another thread) call this; the lock keeps one from
+/// undoing the other half-way, which used to leave the bar stuck behind ordinary windows.
+fn sync_fullscreen(app: &AppHandle) {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let st = app.state::<AppState>();
+    let Some(h) = app.get_webview_window("dock").and_then(|d| win::tauri_hwnd(&d)) else { return };
+    let fs = fullscreen_on_primary();
+    if fs != st.fullscreen.swap(fs, Ordering::SeqCst) {
+        if fs {
+            popups::close_card(app, None);
+            popups::close_menu(app);
+            popups::hide_preview(app);
+            // Behind the app rather than hidden: a hidden webview drops what it drew, and
+            // would come back see-through (showing the taskbar) when Start opens.
+            win::send_to_back(h);
+        } else {
+            win::show_no_activate(h);
+        }
+    } else if !fs && unsafe { IsWindowVisible(h) }.as_bool() && !win::is_topmost(h) {
+        // Safety net: never leave the bar behind other windows outside fullscreen.
+        win::raise_topmost(h);
+    }
 }
 
 /// Background loop: fullscreen hiding, keeping the taskbar hidden, and recovering from
@@ -255,22 +278,7 @@ pub fn start_watcher(app: AppHandle) {
                 let _ = app.run_on_main_thread(move || place(&a));
             }
 
-            let fs = fullscreen_on_primary();
-            if fs != st.fullscreen.swap(fs, Ordering::SeqCst) {
-                let Some(dock) = app.get_webview_window("dock") else { continue };
-                if fs {
-                    popups::close_card(&app, None);
-                    popups::close_menu(&app);
-                    popups::hide_preview(&app);
-                    // Behind the app rather than hidden: a hidden webview drops what it drew,
-                    // and would come back see-through (showing the taskbar) when Start opens.
-                    if let Some(h) = win::tauri_hwnd(&dock) {
-                        win::send_to_back(h);
-                    }
-                } else if let Some(h) = win::tauri_hwnd(&dock) {
-                    win::show_no_activate(h);
-                }
-            }
+            sync_fullscreen(&app);
         }
     });
 }

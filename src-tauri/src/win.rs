@@ -112,6 +112,10 @@ pub fn raise_topmost(h: HWND) {
     }
 }
 
+pub fn is_topmost(h: HWND) -> bool {
+    unsafe { GetWindowLongW(h, GWL_EXSTYLE) as u32 & WS_EX_TOPMOST.0 != 0 }
+}
+
 /// Drop a window out of the topmost band and behind everything else, still shown.
 pub fn send_to_back(h: HWND) {
     unsafe {
