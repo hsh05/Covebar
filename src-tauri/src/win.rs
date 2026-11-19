@@ -112,6 +112,15 @@ pub fn raise_topmost(h: HWND) {
     }
 }
 
+/// Drop a window out of the topmost band and behind everything else, still shown.
+pub fn send_to_back(h: HWND) {
+    unsafe {
+        let f = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER;
+        let _ = SetWindowPos(h, Some(HWND_NOTOPMOST), 0, 0, 0, 0, f);
+        let _ = SetWindowPos(h, Some(HWND_BOTTOM), 0, 0, 0, 0, f);
+    }
+}
+
 pub fn primary_monitor() -> HMONITOR {
     unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) }
 }

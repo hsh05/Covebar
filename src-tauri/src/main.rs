@@ -560,6 +560,16 @@ fn main() {
         prev(info);
     }));
 
+    // WebView2 stops drawing a window it thinks is covered (here: the bar behind a fullscreen
+    // app) and only starts again on input, so the bar came back see-through when Start opened.
+    // Chromium reads one --disable-features list, so Tauri's own defaults are repeated here.
+    if std::env::var_os("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_none() {
+        std::env::set_var(
+            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion",
+        );
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             let _ = show_settings(app);

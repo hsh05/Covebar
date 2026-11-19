@@ -10,7 +10,7 @@ use tauri::{AppHandle, Manager, Theme};
 use windows::Win32::Foundation::RECT;
 use windows::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTONULL};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowLongW, GetWindowRect, IsZoomed, GWL_STYLE, WS_CAPTION,
+    GetForegroundWindow, GetWindowLongW, GetWindowRect, IsWindowVisible, IsZoomed, GWL_STYLE, WS_CAPTION,
 };
 
 const WINDOWS: [&str; 5] = ["dock", "card", "preview", "menu", "settings"];
@@ -159,9 +159,51 @@ static WATCH_APP: std::sync::OnceLock<AppHandle> = std::sync::OnceLock::new();
 /// tick of the watcher, so it doesn't flash.
 pub fn tray_shown() {
     let Some(app) = WATCH_APP.get() else { return };
-    if app.state::<AppState>().taskbar_hidden.load(Ordering::SeqCst) && !taskbar_may_show() {
-        taskbar::reassert_hidden();
+    let st = app.state::<AppState>();
+    if !st.taskbar_hidden.load(Ordering::SeqCst) {
+        return;
     }
+    if !taskbar_may_show() {
+        taskbar::reassert_hidden();
+        return;
+    }
+    // Start opened over a fullscreen app: bring the bar back now rather than at the next
+    // watcher tick, then keep it in front of the taskbar Explorer is showing.
+    if st.fullscreen.load(Ordering::SeqCst) && !fullscreen_on_primary() {
+        st.fullscreen.store(false, Ordering::SeqCst);
+        if let Some(h) = app.get_webview_window("dock").and_then(|d| win::tauri_hwnd(&d)) {
+            win::show_no_activate(h);
+        }
+    }
+    raise_over_taskbar(app);
+}
+
+/// Explorer shows its taskbar with Start and keeps re-raising it while Start opens (more so
+/// coming out of a fullscreen app, where it had dropped the taskbar from topmost). Put the
+/// bar back in front of it a few times over the next ~600 ms.
+fn raise_over_taskbar(app: &AppHandle) {
+    use std::sync::atomic::AtomicBool;
+    static BUSY: AtomicBool = AtomicBool::new(false);
+    let Some(h) = app.get_webview_window("dock").and_then(|d| win::tauri_hwnd(&d)) else { return };
+    if BUSY.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let hv = win::hval(h);
+    let app = app.clone();
+    std::thread::spawn(move || {
+        for _ in 0..12 {
+            // Back in the fullscreen app: the bar stays behind it.
+            if app.state::<AppState>().fullscreen.load(Ordering::SeqCst) {
+                break;
+            }
+            let h = win::hwnd(hv);
+            if unsafe { IsWindowVisible(h) }.as_bool() {
+                win::raise_topmost(h);
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        BUSY.store(false, Ordering::SeqCst);
+    });
 }
 
 /// Background loop: fullscreen hiding, keeping the taskbar hidden, and recovering from
@@ -195,8 +237,12 @@ pub fn start_watcher(app: AppHandle) {
                 continue;
             }
 
-            if hide_tb && !taskbar_may_show() {
-                taskbar::reassert_hidden();
+            if hide_tb {
+                if taskbar_may_show() {
+                    raise_over_taskbar(&app);
+                } else {
+                    taskbar::reassert_hidden();
+                }
             }
 
             // Resolution or scaling changed.
@@ -216,8 +262,10 @@ pub fn start_watcher(app: AppHandle) {
                     popups::close_card(&app, None);
                     popups::close_menu(&app);
                     popups::hide_preview(&app);
+                    // Behind the app rather than hidden: a hidden webview drops what it drew,
+                    // and would come back see-through (showing the taskbar) when Start opens.
                     if let Some(h) = win::tauri_hwnd(&dock) {
-                        win::hide(h);
+                        win::send_to_back(h);
                     }
                 } else if let Some(h) = win::tauri_hwnd(&dock) {
                     win::show_no_activate(h);

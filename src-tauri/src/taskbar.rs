@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{HWND, LPARAM};
+use windows::Win32::Graphics::Gdi::{CreateRectRgn, DeleteObject, GetWindowRgn, SetWindowRgn, GDI_REGION_TYPE};
 use windows::Win32::UI::Shell::{SHAppBarMessage, ABM_GETSTATE, ABM_SETSTATE, APPBARDATA};
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowExW, IsWindowVisible, ShowWindow, ShowWindowAsync, SW_HIDE, SW_SHOWNA,
@@ -97,6 +98,7 @@ pub fn hide(marker: &PathBuf) {
 
 /// Hide any taskbar window that has become visible again. Doesn't wait on Explorer.
 pub fn reassert_hidden() {
+    clip_away();
     for h in tray_windows() {
         unsafe {
             if IsWindowVisible(h).as_bool() {
@@ -126,9 +128,27 @@ pub fn force_restore() {
     show_all();
 }
 
+/// Clip each taskbar window to an empty shape. Explorer still shows its taskbar with Start
+/// and some flyouts, and on top of the bar at times; clipped, it draws nothing and takes no
+/// clicks while it is up. `show_all` takes the clip off again.
+pub fn clip_away() {
+    for h in tray_windows() {
+        unsafe {
+            let probe = CreateRectRgn(0, 0, 0, 0);
+            let has = GetWindowRgn(h, probe) != GDI_REGION_TYPE(0);
+            let _ = DeleteObject(probe.into());
+            if !has {
+                // The window owns the region once set; don't free it.
+                SetWindowRgn(h, Some(CreateRectRgn(0, 0, 0, 0)), true);
+            }
+        }
+    }
+}
+
 fn show_all() {
     for h in tray_windows() {
         unsafe {
+            SetWindowRgn(h, None, true);
             let _ = ShowWindow(h, SW_SHOWNA);
         }
     }

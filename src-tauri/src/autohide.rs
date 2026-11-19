@@ -137,8 +137,10 @@ pub fn start(app: AppHandle) {
                 };
 
             if is_hidden() {
-                // Opening Start (or search) brings the bar up with it, like the taskbar.
-                let start = win::is_start_ui(unsafe { GetForegroundWindow() });
+                // Opening Start (or search) brings the bar up with it, like the taskbar. So does
+                // Explorer showing its own taskbar (it does with Start and some flyouts), which
+                // would otherwise sit there in place of the bar.
+                let start = win::is_start_ui(unsafe { GetForegroundWindow() }) || windows_taskbar_up(&app);
                 if (at_edge && !buttons_down()) || popups_open(&app) || start {
                     slide(&app, 0);
                     last_needed = Instant::now();
@@ -154,7 +156,7 @@ pub fn start(app: AppHandle) {
                 && pt.x < d.x + bar.right + slack
                 && pt.y >= d.y + bar.top - slack
                 && pt.y < d.y + bar.bottom + slack;
-            let shell = win::is_shell_ui(unsafe { GetForegroundWindow() });
+            let shell = win::is_shell_ui(unsafe { GetForegroundWindow() }) || windows_taskbar_up(&app);
             if over_bar || at_edge || popups_open(&app) || buttons_down() || shell {
                 last_needed = Instant::now();
             } else if last_needed.elapsed() >= HIDE_DELAY {
@@ -162,6 +164,13 @@ pub fn start(app: AppHandle) {
             }
         }
     });
+}
+
+/// Covebar hides the Windows taskbar, yet Explorer has it on screen right now.
+fn windows_taskbar_up(app: &AppHandle) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::IsWindowVisible;
+    app.state::<AppState>().taskbar_hidden.load(Ordering::SeqCst)
+        && crate::taskbar::primary_tray().is_some_and(|t| unsafe { IsWindowVisible(t) }.as_bool())
 }
 
 fn buttons_down() -> bool {
