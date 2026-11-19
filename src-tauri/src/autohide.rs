@@ -22,7 +22,7 @@ static REGION: Mutex<(Option<RECT>, i32)> = Mutex::new((None, 0));
 /// Set by `reset` after the dock was re-placed, so the loop restarts its hide countdown.
 static RESET: AtomicBool = AtomicBool::new(false);
 
-const HIDE_DELAY: Duration = Duration::from_millis(650);
+const HIDE_DELAY: Duration = Duration::from_millis(350);
 const SLIDE_MS: u64 = 200;
 /// Cursor within this many px of the screen edge brings the bar back.
 const TRIGGER: i32 = 2;
