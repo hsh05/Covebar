@@ -19,8 +19,17 @@ use windows::Win32::Graphics::Dwm::{
 /// Popups draw their own surface so they can animate in and out smoothly.
 pub const PAD: f64 = 16.0;
 
+/// Popups that must open instantly are made at start-up. The tour and the timer alarm are
+/// rare, so they are made when needed and closed again after: each webview costs ~40 MB.
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
-    for (label, w, h) in [("card", 320.0, 360.0), ("preview", 240.0, 180.0), ("menu", 240.0, 200.0), ("osd", OSD_SIZE, OSD_SIZE), ("alarm", ALARM_W, ALARM_H), ("tour", TOUR_W, TOUR_H)] {
+    for (label, w, h) in [("card", 320.0, 360.0), ("preview", 240.0, 180.0), ("menu", 240.0, 200.0), ("osd", OSD_SIZE, OSD_SIZE)] {
+        build(app, label, w, h)?;
+    }
+    Ok(())
+}
+
+fn build(app: &AppHandle, label: &str, w: f64, h: f64) -> tauri::Result<()> {
+    {
         let win = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
             .title(app.package_info().name.clone())
             .decorations(false)
@@ -45,6 +54,75 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+// ---------------------------------------------------------------- made on demand
+
+type Pending = Box<dyn FnOnce(&AppHandle, tauri::WebviewWindow) + Send>;
+
+enum Lazy {
+    Creating(Vec<Pending>),
+    Ready,
+}
+
+static LAZY: std::sync::Mutex<Vec<(&'static str, Lazy)>> = std::sync::Mutex::new(Vec::new());
+
+/// Run `then` with the window once its page is listening, making the window first if needed.
+fn with_lazy(app: &AppHandle, label: &'static str, w: f64, h: f64, then: impl FnOnce(&AppHandle, tauri::WebviewWindow) + Send + 'static) {
+    let mut lazy = LAZY.lock().unwrap();
+    match lazy.iter_mut().find(|(l, _)| *l == label) {
+        Some((_, Lazy::Ready)) => {
+            drop(lazy);
+            if let Some(win) = app.get_webview_window(label) {
+                then(app, win);
+            }
+        }
+        Some((_, Lazy::Creating(q))) => q.push(Box::new(then)),
+        None => {
+            lazy.push((label, Lazy::Creating(vec![Box::new(then)])));
+            drop(lazy);
+            let app = app.clone();
+            // Off the calling thread: making a window inside a command handler can deadlock.
+            std::thread::spawn(move || {
+                // A window of this name may still be on its way out; give it a moment.
+                for _ in 0..10 {
+                    match build(&app, label, w, h) {
+                        Ok(()) => return,
+                        Err(e) => {
+                            crate::dlog!("popup {label}: {e}");
+                            std::thread::sleep(Duration::from_millis(100));
+                        }
+                    }
+                }
+                LAZY.lock().unwrap().retain(|(l, _)| *l != label);
+            });
+        }
+    }
+}
+
+/// The page in a made-on-demand popup has its listeners up: run what was waiting for it.
+pub fn popup_ready(app: &AppHandle, label: &str) {
+    let queued = {
+        let mut lazy = LAZY.lock().unwrap();
+        let Some((_, state)) = lazy.iter_mut().find(|(l, _)| *l == label) else { return };
+        match std::mem::replace(state, Lazy::Ready) {
+            Lazy::Creating(q) => q,
+            Lazy::Ready => Vec::new(),
+        }
+    };
+    if let Some(win) = app.get_webview_window(label) {
+        for f in queued {
+            f(app, win.clone());
+        }
+    }
+}
+
+/// Close a made-on-demand popup, freeing its webview.
+fn drop_lazy(app: &AppHandle, label: &str) {
+    LAZY.lock().unwrap().retain(|(l, _)| *l != label);
+    if let Some(w) = app.get_webview_window(label) {
+        let _ = w.destroy();
+    }
+}
+
 // ---------------------------------------------------------------- first-run tour
 
 const TOUR_W: f64 = 380.0;
@@ -52,20 +130,20 @@ const TOUR_H: f64 = 248.0;
 
 /// Show the short tour above the middle of the dock.
 pub fn show_tour(app: &AppHandle) {
-    let Some(w) = app.get_webview_window("tour") else { return };
     close_card(app, None);
     close_menu(app);
-    let d = *app.state::<AppState>().dock.lock().unwrap();
-    place_popup(app, &w, d.x + d.w / 2, TOUR_W, TOUR_H);
-    let _ = app.emit_to("tour", "tour-show", ());
-    let _ = w.show();
-    let _ = w.set_focus();
+    with_lazy(app, "tour", TOUR_W, TOUR_H, |app, w| {
+        let d = *app.state::<AppState>().dock.lock().unwrap();
+        place_popup(app, &w, d.x + d.w / 2, TOUR_W, TOUR_H);
+        let _ = app.emit_to("tour", "tour-show", ());
+        let _ = w.show();
+        let _ = w.set_focus();
+    });
 }
 
+/// Called by the tour once its exit animation has played.
 pub fn hide_tour(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window("tour") {
-        let _ = w.hide();
-    }
+    drop_lazy(app, "tour");
 }
 
 // ---------------------------------------------------------------- timer alarm
@@ -78,8 +156,6 @@ static ALARM_SESSION: AtomicU64 = AtomicU64::new(0);
 /// Show the "time's up" popup next to the dock, over the timer tile when `anchor` (dock CSS
 /// x and width) is given, else over the middle of the dock. It doesn't take focus.
 pub fn show_alarm(app: &AppHandle, anchor: Option<(f64, f64)>, duration_ms: u64) {
-    let Some(w) = app.get_webview_window("alarm") else { return };
-    let Some(h) = win::tauri_hwnd(&w) else { return };
     let me = ALARM_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
     let center = match anchor {
         Some((x, aw)) => anchor_center(app, x, aw),
@@ -88,29 +164,41 @@ pub fn show_alarm(app: &AppHandle, anchor: Option<(f64, f64)>, duration_ms: u64)
             d.x + d.w / 2
         }
     };
-    place_popup(app, &w, center, ALARM_W, ALARM_H);
-    let _ = app.emit_to("alarm", "alarm-show", serde_json::json!({ "session": me, "durationMs": duration_ms }));
-    win::show_no_activate(h);
+    with_lazy(app, "alarm", ALARM_W, ALARM_H, move |app, w| {
+        // Dismissed while the window was still being made.
+        if ALARM_SESSION.load(Ordering::SeqCst) != me {
+            if !w.is_visible().unwrap_or(false) {
+                drop_lazy(app, "alarm");
+            }
+            return;
+        }
+        let Some(h) = win::tauri_hwnd(&w) else { return };
+        place_popup(app, &w, center, ALARM_W, ALARM_H);
+        let _ = app.emit_to("alarm", "alarm-show", serde_json::json!({ "session": me, "durationMs": duration_ms }));
+        win::show_no_activate(h);
+    });
 }
 
 pub fn alarm_session() -> u64 {
     ALARM_SESSION.load(Ordering::SeqCst)
 }
 
-/// Play the alarm popup's exit animation, then hide it.
+/// Play the alarm popup's exit animation, then close it.
 pub fn hide_alarm(app: &AppHandle) {
+    // Bumped first so a show still waiting on the window being made is called off.
+    let me = ALARM_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
     let Some(w) = app.get_webview_window("alarm") else { return };
     if !w.is_visible().unwrap_or(false) {
+        // Never shown (or still loading): nothing to animate.
+        drop_lazy(app, "alarm");
         return;
     }
-    let Some(h) = win::tauri_hwnd(&w) else { return };
-    let me = ALARM_SESSION.fetch_add(1, Ordering::SeqCst) + 1;
     let _ = app.emit_to("alarm", "alarm-out", ());
-    let hw = win::hval(h);
+    let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(220));
         if ALARM_SESSION.load(Ordering::SeqCst) == me {
-            win::hide(win::hwnd(hw));
+            drop_lazy(&app, "alarm");
         }
     });
 }

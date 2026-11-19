@@ -34,13 +34,14 @@
   // Bumped on every show so the entrance animation replays.
   let count = $state(0);
 
+  // This window is made on demand: say when it can take "tour-show".
   listen("tour-show", () => {
     i = 0;
     dir = 1;
     out = false;
     open = true;
     count++;
-  });
+  }).then(() => invoke("popup_ready"));
 
   function go(to: number) {
     if (to < 0 || to >= steps.length || to === i) return;

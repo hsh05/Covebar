@@ -344,6 +344,11 @@ fn hide_tour(app: AppHandle) {
 }
 
 #[tauri::command]
+fn popup_ready(app: AppHandle, window: tauri::WebviewWindow) {
+    popups::popup_ready(&app, window.label());
+}
+
+#[tauri::command]
 fn open_log_folder() {
     if let Some(d) = log::dir() {
         apps::launch(&d.to_string_lossy());
@@ -635,6 +640,7 @@ fn main() {
             found_update,
             install_update,
             hide_tour,
+            popup_ready,
             get_hotkey_status,
             pause_hotkeys,
             open_settings,

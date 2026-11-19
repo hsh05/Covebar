@@ -1,5 +1,6 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
+  import { invoke } from "@tauri-apps/api/core";
   import Icon from "../lib/Icon.svelte";
   import { ticker, timersAction } from "../lib/live.svelte";
   import { duration, presetLabel } from "../lib/format";
@@ -16,13 +17,16 @@
   let count = $state(0);
   const clock = ticker(1000, () => cur != null && !out);
 
-  listen<Show>("alarm-show", (e) => {
-    cur = e.payload;
-    since = Date.now();
-    out = false;
-    count++;
-  });
-  listen("alarm-out", () => (out = true));
+  // This window is made on demand: say when it can take "alarm-show".
+  Promise.all([
+    listen<Show>("alarm-show", (e) => {
+      cur = e.payload;
+      since = Date.now();
+      out = false;
+      count++;
+    }),
+    listen("alarm-out", () => (out = true)),
+  ]).then(() => invoke("popup_ready"));
 
   const label = $derived(cur && cur.durationMs > 0 ? `${presetLabel(Math.round(cur.durationMs / 1000))} timer` : "Timer");
   const ago = $derived(Math.max(0, clock.now - since));
