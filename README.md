@@ -63,7 +63,7 @@ Covebar has no accounts, analytics or telemetry. It connects to the internet onl
 
 - **Updates**: the release files on this GitHub repository.
 - **Currency**: rates from [open.er-api.com](https://open.er-api.com), with a jsDelivr-hosted rate list as a backup. Only while the Currency widget is on.
-- **Claude Usage**: Anthropic's usage endpoint, only while that widget is on. Covebar reuses the Claude Code sign-in already on your PC (`%USERPROFILE%\.claude\.credentials.json`). It only reads that file, never changes it, and never writes the token to its log. Covebar may run `claude auth status` so Claude Code can renew an expired sign-in. The endpoint is undocumented, so the widget shows a message instead of numbers if the endpoint changes.
+- **Claude Usage**: Anthropic's usage endpoint, only while that widget is on. Covebar reuses the Claude Code sign-in already on your PC (`%USERPROFILE%\.claude\.credentials.json`). It only reads that file, never changes it, and never writes the token to its log. When the sign-in expires, the widget keeps the last numbers and updates as soon as Claude Code renews it, which happens the next time you use Claude Code. The endpoint is undocumented, so the widget shows a message instead of numbers if the endpoint changes.
 
 ## Temperatures
 

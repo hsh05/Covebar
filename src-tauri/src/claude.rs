@@ -39,17 +39,9 @@ static WORKER: OnceLock<Worker> = OnceLock::new();
 static STATE: Mutex<Option<Usage>> = Mutex::new(None);
 static APP: OnceLock<AppHandle> = OnceLock::new();
 static NEXT: Mutex<Option<Instant>> = Mutex::new(None);
-/// The Claude Code command-line tool couldn't be started, so expired sign-ins can't be renewed.
-static NO_CLI: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// What to tell the user when the saved sign-in has expired.
-fn expired_message() -> &'static str {
-    if NO_CLI.load(std::sync::atomic::Ordering::Relaxed) {
-        "Your Claude Code sign-in expired. Install the Claude Code command-line tool so Covebar can renew it, or run claude once in a terminal."
-    } else {
-        "Your Claude Code sign-in expired. Run claude once in a terminal to renew it."
-    }
-}
+/// The saved sign-in only renews when Claude Code itself runs (nothing here can renew it
+/// without writing the file, or replacing the refresh token Claude Code depends on).
+const EXPIRED: &str = "Your Claude Code sign-in expired. It renews the next time you use Claude Code.";
 
 const EVERY: Duration = Duration::from_secs(5 * 60);
 const BACKOFF: Duration = Duration::from_secs(15 * 60);
@@ -74,8 +66,30 @@ fn enabled() -> bool {
     APP.get().map(|a| a.state::<crate::state::AppState>().settings.lock().unwrap().has_widget("claude")).unwrap_or(false)
 }
 
+fn creds_path() -> Option<std::path::PathBuf> {
+    let home = std::env::var_os("USERPROFILE")?;
+    Some(std::path::Path::new(&home).join(".claude").join(".credentials.json"))
+}
+
+/// When the sign-in file last changed: Claude Code rewrites it when it signs in or renews.
+fn creds_changed_at() -> Option<std::time::SystemTime> {
+    std::fs::metadata(creds_path()?).ok()?.modified().ok()
+}
+
 fn tick() {
-    if enabled() && NEXT.lock().unwrap().is_none_or(|t| Instant::now() >= t) {
+    static SEEN: Mutex<Option<std::time::SystemTime>> = Mutex::new(None);
+    if !enabled() {
+        return;
+    }
+    // A fresh sign-in from Claude Code: fetch now rather than at the next scheduled check.
+    let changed = {
+        let now = creds_changed_at();
+        let mut seen = SEEN.lock().unwrap();
+        let changed = seen.is_some() && *seen != now;
+        *seen = now;
+        changed
+    };
+    if changed || NEXT.lock().unwrap().is_none_or(|t| Instant::now() >= t) {
         fetch();
     }
 }
@@ -97,8 +111,7 @@ struct Creds {
 }
 
 fn read_creds() -> Option<Creds> {
-    let home = std::env::var_os("USERPROFILE")?;
-    let path = std::path::Path::new(&home).join(".claude").join(".credentials.json");
+    let path = creds_path()?;
     let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
     let o = &v["claudeAiOauth"];
     Some(Creds {
@@ -132,70 +145,7 @@ fn with_status(status: &str, message: &str, plan: Option<String>) -> Usage {
     Usage { status: status.into(), message: Some(message.into()), plan: plan.or(last.plan), ..last }
 }
 
-/// Claude Code renews its sign-in whenever it runs, but the desktop app keeps its own copy and
-/// leaves this file to expire. Run `claude auth status` (no prompt, no usage) quietly so the
-/// CLI renews the file itself; Covebar still only ever reads it. At most every 10 minutes.
-fn renew_signin() -> bool {
-    use std::os::windows::process::CommandExt;
-    use std::process::{Command, Stdio};
-    static LAST: Mutex<Option<Instant>> = Mutex::new(None);
-    {
-        let mut last = LAST.lock().unwrap();
-        if last.is_some_and(|t| t.elapsed() < Duration::from_secs(10 * 60)) {
-            return false;
-        }
-        *last = Some(Instant::now());
-    }
-    let home = std::env::var_os("USERPROFILE").map(std::path::PathBuf::from).unwrap_or_default();
-    let native = home.join(".local").join("bin").join("claude.exe");
-    let mut cmd = if native.is_file() {
-        Command::new(native)
-    } else {
-        // npm installs a .cmd shim, which needs cmd to run.
-        let mut c = Command::new("cmd");
-        c.args(["/d", "/c", "claude"]);
-        c
-    };
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let child = cmd
-        .args(["auth", "status"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn();
-    let Ok(mut child) = child else {
-        crate::dlog!("claude usage: Claude Code CLI not found");
-        NO_CLI.store(true, std::sync::atomic::Ordering::Relaxed);
-        return false;
-    };
-    NO_CLI.store(false, std::sync::atomic::Ordering::Relaxed);
-    let started = Instant::now();
-    loop {
-        match child.try_wait() {
-            // `cmd /c claude` runs even when there's no claude; it then exits with 9009.
-            Ok(Some(status)) if status.code() == Some(9009) => {
-                NO_CLI.store(true, std::sync::atomic::Ordering::Relaxed);
-                return false;
-            }
-            Ok(Some(status)) => {
-                crate::dlog!("claude usage: asked Claude Code to renew its sign-in ({status})");
-                return status.success();
-            }
-            Ok(None) if started.elapsed() < Duration::from_secs(30) => std::thread::sleep(Duration::from_millis(200)),
-            _ => {
-                let _ = child.kill();
-                return false;
-            }
-        }
-    }
-}
-
 fn fetch() {
-    fetch_once(true);
-}
-
-fn fetch_once(may_renew: bool) {
     let Some(creds) = read_creds() else {
         *NEXT.lock().unwrap() = Some(Instant::now() + EVERY);
         return publish(Usage {
@@ -206,13 +156,11 @@ fn fetch_once(may_renew: bool) {
     };
     let plan = creds.plan.clone();
     // Claude Code refreshes its own sign-in; we never do (that would mean writing the file).
+    // `tick` notices when it has, so there's no need to ask often meanwhile.
     if creds.expires_at.is_some_and(|e| e < now_ms()) {
         drop(creds);
-        if may_renew && renew_signin() {
-            return fetch_once(false);
-        }
-        *NEXT.lock().unwrap() = Some(Instant::now() + Duration::from_secs(60));
-        return publish(with_status("expired", expired_message(), plan));
+        *NEXT.lock().unwrap() = Some(Instant::now() + EVERY);
+        return publish(with_status("expired", EXPIRED, plan));
     }
 
     let auth = format!("Bearer {}", creds.token);
@@ -228,11 +176,7 @@ fn fetch_once(may_renew: bool) {
             ),
             None => (EVERY, with_status("error", "The usage service answered in an unexpected way", plan)),
         },
-        Ok((401 | 403, _)) if may_renew && renew_signin() => return fetch_once(false),
-        Ok((401 | 403, _)) => (
-            Duration::from_secs(60),
-            with_status("expired", expired_message(), plan),
-        ),
+        Ok((401 | 403, _)) => (EVERY, with_status("expired", EXPIRED, plan)),
         Ok((429, _)) => (BACKOFF, with_status("error", "Usage service is busy; trying again later", plan)),
         Ok((status, _)) => {
             crate::dlog!("claude usage: HTTP {status}");
