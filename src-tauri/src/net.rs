@@ -52,6 +52,10 @@ pub fn get(url: &str, headers: &[(&str, &str)], timeout_ms: i32) -> Result<Respo
             return Err(err("open"));
         }
         let _ = WinHttpSetTimeouts(session.0, timeout_ms, timeout_ms, timeout_ms, timeout_ms);
+        // Race IPv4 against IPv6 like browsers do. On networks where IPv6 is advertised but
+        // goes nowhere, WinHTTP otherwise waits on it until the request times out (12002).
+        let on: u32 = 1;
+        let _ = WinHttpSetOption(Some(session.0), WINHTTP_OPTION_IPV6_FAST_FALLBACK, Some(std::slice::from_raw_parts(&on as *const u32 as *const u8, 4)));
         let conn = Handle(WinHttpConnect(session.0, &HSTRING::from(host), port, 0));
         if conn.0.is_null() {
             return Err(err("connect"));
