@@ -88,7 +88,7 @@ fn set_settings(app: AppHandle, state: State<AppState>, mut settings: Settings) 
     if old.hotkeys != settings.hotkeys {
         hotkeys::update(settings.hotkeys.clone());
     }
-    if old.autostart != settings.autostart {
+    if old.autostart != settings.autostart && !cfg!(debug_assertions) {
         let al = app.autolaunch();
         let r = if settings.autostart { al.enable() } else { al.disable() };
         r.map_err(|e| e.to_string())?;
@@ -484,9 +484,15 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         taskbar_hidden: AtomicBool::new(false),
     });
 
-    // Keep the autostart entry in sync with the setting.
+    // Keep the autostart entry in sync with the setting. A debug build needs the dev server,
+    // so it never registers itself; it only clears an entry an older one left pointing at it.
     let al = handle.autolaunch();
-    if al.is_enabled().unwrap_or(false) != settings.autostart {
+    if cfg!(debug_assertions) {
+        let me = std::env::current_exe().map(|p| p.to_string_lossy().to_lowercase()).unwrap_or_default();
+        if win::startup_entry("Covebar").is_some_and(|v| !me.is_empty() && v.to_lowercase().contains(&me)) {
+            let _ = al.disable();
+        }
+    } else if al.is_enabled().unwrap_or(false) != settings.autostart {
         let _ = if settings.autostart { al.enable() } else { al.disable() };
     }
 

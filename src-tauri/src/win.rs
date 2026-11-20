@@ -175,6 +175,30 @@ pub fn build_number() -> u32 {
         .unwrap_or(0)
 }
 
+/// The command line of a per-user "start with Windows" entry, if there is one.
+pub fn startup_entry(name: &str) -> Option<String> {
+    use windows::Win32::System::Registry::HKEY_CURRENT_USER;
+    let mut buf = [0u16; 1024];
+    let mut size = (buf.len() * 2) as u32;
+    let key = wide("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+    let val = wide(name);
+    let r = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            PCWSTR(key.as_ptr()),
+            PCWSTR(val.as_ptr()),
+            RRF_RT_REG_SZ,
+            None,
+            Some(buf.as_mut_ptr() as *mut _),
+            Some(&mut size),
+        )
+    };
+    if r.is_err() {
+        return None;
+    }
+    Some(String::from_utf16_lossy(&buf[..(size as usize / 2)]).trim_end_matches('\0').to_string())
+}
+
 pub fn is_windows_11() -> bool {
     build_number() >= 22000
 }
